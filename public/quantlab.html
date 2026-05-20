@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>量化工厂 — 多因子Alpha & 组合优化</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<link rel="stylesheet" href="/css/quantlab.css">
+</head>
+<body>
+<div id="app">
+  <header class="header">
+    <a href="/" class="logo">量化交易平台</a>
+    <span class="subtitle">| 量化工厂 — 多因子Alpha · 组合优化 · 风险归因</span>
+    <nav style="margin-left:auto;">
+      <a href="/" class="back-btn">← 主平台</a>
+    </nav>
+  </header>
+
+  <!-- 顶部Alpha条 -->
+  <div class="alpha-strip" id="alphaStrip">
+    <span class="loading-text">加载因子数据中...</span>
+  </div>
+
+  <!-- 三大面板 -->
+  <div class="panels">
+    <!-- 面板1: 因子看板 -->
+    <section class="panel" id="panelFactors">
+      <div class="panel-header">
+        <h2>因子暴露热力图</h2>
+        <div class="panel-tabs">
+          <button class="ptab active" data-view="heatmap">热力图</button>
+          <button class="ptab" data-view="bar">Alpha排序</button>
+          <button class="ptab" data-view="ic">因子IC</button>
+        </div>
+      </div>
+      <div class="chart-wide" id="chartFactorHeat"></div>
+      <div class="chart-wide" id="chartAlphaBar" style="display:none;"></div>
+      <div class="chart-wide" id="chartFactorIC" style="display:none;"></div>
+      <div class="legend-hint">
+        <span>动量</span><span>价值</span><span>质量</span><span>低波</span><span>规模</span><span>成长</span><span>流动性</span><span>反转</span>
+      </div>
+    </section>
+
+    <!-- 面板2: 组合构建器 -->
+    <section class="panel" id="panelPortfolio">
+      <div class="panel-header">
+        <h2>组合优化器</h2>
+        <div class="opt-controls">
+          <input type="text" id="portCodes" placeholder="股票代码(逗号分隔)" value="600519,000858,300750,601318,000001,002415,600276,601012" style="width:320px;" />
+          <select id="optMethod">
+            <option value="maxSharpe">Max Sharpe</option>
+            <option value="riskParity">Risk Parity</option>
+            <option value="minVariance">Min Variance</option>
+            <option value="maxDiversification">Max Diversification</option>
+            <option value="blackLitterman">Black-Litterman</option>
+            <option value="equalWeight">Equal Weight</option>
+          </select>
+          <button id="btnOptimize">运行优化</button>
+        </div>
+      </div>
+      <div class="port-grid">
+        <div class="chart-mid" id="chartPie"></div>
+        <div class="chart-mid" id="chartFrontier"></div>
+      </div>
+      <div class="port-stats" id="portStats"></div>
+      <div class="port-table" id="portTable"></div>
+    </section>
+
+    <!-- 面板3: 风险仪表盘 -->
+    <section class="panel" id="panelRisk">
+      <div class="panel-header">
+        <h2>风险仪表盘</h2>
+        <div class="opt-controls">
+          <input type="text" id="riskCode" placeholder="股票代码" value="600519" style="width:130px;" />
+          <button id="btnRisk">分析风险</button>
+        </div>
+      </div>
+      <div class="risk-grid">
+        <div class="risk-metric">
+          <span class="rm-label">年化波动率</span>
+          <span class="rm-value" id="rVol">-</span>
+        </div>
+        <div class="risk-metric">
+          <span class="rm-label">VaR 95% (日)</span>
+          <span class="rm-value" id="rVaR">-</span>
+        </div>
+        <div class="risk-metric">
+          <span class="rm-label">Beta</span>
+          <span class="rm-value" id="rBeta">-</span>
+        </div>
+        <div class="risk-metric">
+          <span class="rm-label">系统风险占比</span>
+          <span class="rm-value" id="rSys">-</span>
+        </div>
+        <div class="risk-metric">
+          <span class="rm-label">特质风险</span>
+          <span class="rm-value" id="rSpec">-</span>
+        </div>
+        <div class="risk-metric">
+          <span class="rm-label">R²</span>
+          <span class="rm-value" id="rR2">-</span>
+        </div>
+      </div>
+      <div class="chart-mid" id="chartRiskDecomp"></div>
+      <div class="card stress-table" id="stressTable"></div>
+    </section>
+  </div>
+</div>
+
+<script src="/js/quantlab.js"></script>
+</body>
+</html>

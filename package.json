@@ -1,0 +1,56 @@
+{
+  "name": "stock-quant",
+  "version": "2.0.0",
+  "description": "量化交易平台 — 多因子Alpha · 组合优化 · 风险归因",
+  "author": "QuantLab",
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "electron": "electron electron-main.js",
+    "build": "electron-builder --win",
+    "build:dir": "electron-builder --win --dir"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "express": "^4.21.0",
+    "express-rate-limit": "^8.5.2",
+    "iconv-lite": "^0.7.2"
+  },
+  "devDependencies": {
+    "electron": "^33.4.0",
+    "electron-builder": "^26.8.1",
+    "electron-packager": "^17.1.2"
+  },
+  "build": {
+    "appId": "com.quantlab.stock-quant",
+    "productName": "量化交易平台",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "server.js",
+      "src/**/*",
+      "public/**/*",
+      "electron-main.js",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "量化交易平台"
+    }
+  }
+}

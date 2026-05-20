@@ -1,0 +1,14 @@
+# Render.com 部署配置
+services:
+  - type: web
+    name: stock-quant
+    env: node
+    region: singapore  # 新加坡节点，对中国API延迟最低
+    buildCommand: npm install --production
+    startCommand: node server.js
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
