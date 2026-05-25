@@ -1,0 +1,28 @@
+{均线多头排列选股}
+{条件选股公式 - 多头排列 + 启动信号}
+
+{均线计算}
+MA5:=MA(C,5); MA10:=MA(C,10);
+MA20:=MA(C,20); MA60:=MA(C,60);
+
+{多头排列}
+MT1:=MA5>MA10 AND MA10>MA20;            {短期多头}
+MT2:=MA5>MA10 AND MA10>MA20 AND MA20>MA60; {完整多头}
+
+{均线发散 — 5日均线加速向上}
+SPREAD:=MA5/MA20;
+SPREADOK:=SPREAD>REF(SPREAD,3);
+
+{价格站稳均线}
+ABOVE:=C>MA5 AND C>MA10 AND C>MA20;
+
+{成交量配合}
+AV20:=MA(V,20);
+VACTIVE:=V>AV20;
+
+{短期有启动迹象}
+CHG5:=(C-REF(C,5))/REF(C,5)*100;
+CHGUP:=CHG5>1.5;
+
+{综合选股}
+SELECT:MT1 AND ABOVE AND SPREADOK AND VACTIVE AND CHGUP;

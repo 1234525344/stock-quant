@@ -2,24 +2,73 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>量化交易平台 — 让投资更简单</title>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="免费量化交易分析平台，提供A股K线技术分析、策略回测、资金流向、AI策略进化器、因子模型等功能。数据来源新浪/东方财富，实时行情。">
+<meta name="keywords" content="量化交易,A股,股票分析,策略回测,技术指标,资金流向,K线图,MACD,RSI,选股">
+<meta property="og:title" content="量化交易平台 — 让投资更简单">
+<meta property="og:description" content="免费量化分析工具，A股技术分析+策略回测+资金流向+AI进化">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://stockquant.serveousercontent.com">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#0a0e27">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="canonical" href="https://stockquant.serveousercontent.com">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+<title>量化交易平台 — 免费A股量化分析工具 | 策略回测·资金流向·AI选股</title>
 <link rel="stylesheet" href="/css/style.css">
+<!-- 诊断：捕获所有JS错误并显示在页面上 -->
+<script>
+window.__errors = [];
+window.onerror = function(msg, src, line, col, err) {
+  var e = {msg: msg, src: (src||'').split('/').pop(), line: line, col: col, time: new Date().toLocaleTimeString()};
+  window.__errors.push(e);
+  var el = document.getElementById('__diag');
+  if (!el) { el = document.createElement('div'); el.id = '__diag'; el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:red;color:#fff;padding:12px;font:13px/1.5 monospace;max-height:50vh;overflow:auto;'; document.body.appendChild(el); }
+  el.innerHTML = '<b>JS ERRORS (' + window.__errors.length + ')</b><br>' + window.__errors.map(function(e){ return e.time + ' [' + e.src + ':' + e.line + '] ' + e.msg; }).join('<br>');
+};
+window.addEventListener('unhandledrejection', function(e) {
+  window.onerror('Promise: ' + (e.reason && e.reason.message || e.reason || 'unknown'), '', 0, 0);
+});
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    var el = document.getElementById('__diag');
+    if (el && window.__errors.length === 0) el.style.display = 'none';
+  }, 3000);
+});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="/js/modules/utils.js"></script>
+<script src="/js/modules/managers.js"></script>
+<script src="/js/perf-monitor.js" defer></script>
 </head>
 <body>
+  <div id="__loading" style="position:fixed;inset:0;z-index:99998;background:#0a0e27;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#818cf8;font-family:monospace;">
+    <div style="font-size:24px;margin-bottom:16px;">⏳</div>
+    <div id="__loadingMsg">页面加载中...</div>
+    <div id="__loadingStep" style="font-size:11px;color:#5f6b8a;margin-top:8px;"></div>
+  </div>
 <div id="app">
   <!-- 顶部导航 -->
   <header class="header">
     <div class="logo">量化交易平台</div>
     <nav>
-      <button class="nav-btn active" data-page="market">市场总览</button>
-      <button class="nav-btn" data-page="stock">个股分析</button>
-      <button class="nav-btn" data-page="backtest">策略回测</button>
-      <button class="nav-btn" data-page="compare">策略对比</button>
-      <button class="nav-btn" data-page="fundflow">资金流向</button>
-      <button class="nav-btn" data-page="scan">批量选股</button>
-      <a href="/trade-center" class="nav-btn" style="text-decoration:none;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font-weight:600;">交易中心</a>
+      <span class="nav-group-label">看行情</span>
+      <button class="nav-btn active" data-page="market" title="看大盘涨跌、板块资金、市场情绪 · 快捷键 1">市场总览<kbd>1</kbd></button>
+      <button class="nav-btn" data-page="stock" title="看个股K线、技术指标、机构研报 · 快捷键 2">个股分析<kbd>2</kbd></button>
+      <button class="nav-btn" data-page="fundflow" title="看主力资金在买什么卖什么 · 快捷键 3">资金流向<kbd>3</kbd></button>
+      <button class="nav-btn" data-page="fund" title="看ETF基金板块资金流向，发掘投资机会">基金板块</button>
+      <span class="nav-group-label">做策略</span>
+      <button class="nav-btn" data-page="portfolio" title="分析多只股票的组合风险收益">组合分析</button>
+      <button class="nav-btn" data-page="backtest" title="用历史数据检验买卖策略能不能赚钱 · 快捷键 4">策略回测<kbd>4</kbd></button>
+      <button class="nav-btn" data-page="compare" title="把多个策略放在一起比较谁更好 · 快捷键 5">策略对比<kbd>5</kbd></button>
+      <button class="nav-btn" data-page="scan" title="一键筛选出符合条件的股票 · 快捷键 6">批量选股<kbd>6</kbd></button>
+      <span class="nav-group-label">高级</span>
+      <button class="nav-btn" data-page="risk" title="监控持仓风险、设置止损、压力测试 · 快捷键 7">风控中心<kbd>7</kbd></button>
+      <a href="/trade-center" class="nav-btn" style="text-decoration:none;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font-weight:600;" title="自动化模拟交易，设置策略自动买卖">交易中心</a>
+      <a href="/vip" class="nav-btn" style="text-decoration:none;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-weight:600;" title="升级会员解锁全部功能">VIP</a>
+      <a href="/marketplace" class="nav-btn" style="text-decoration:none;color:#c8cdf0;" title="发现别人分享的优质策略">策略市场</a>
     </nav>
     <div class="search-box">
       <input type="text" id="searchInput" placeholder="搜股票代码/名称, 回车分析..." />
@@ -41,9 +90,33 @@
     <div class="market-weather" id="marketWeather">
       <div class="weather-icon" id="weatherIcon">📊</div>
       <div class="weather-content">
-        <h2 id="weatherTitle">加载市场数据中...</h2>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <h2 id="weatherTitle" style="margin:0;">加载市场数据中...</h2>
+          <button class="ai-explain-btn" id="btnAISummary" style="display:none;" title="让 AI 根据实时数据生成白话市场解读">🤖 AI 解读</button>
+        </div>
         <p id="weatherSummary">正在获取最新行情，请稍候...</p>
       </div>
+    </div>
+
+    <!-- AI 策略推荐 -->
+    <div class="card strategy-recommend" id="strategyRecommend" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <h3 style="margin:0;">🎯 AI 策略推荐</h3>
+        <button class="ai-explain-btn" id="btnAIStrategy" title="让 AI 推荐当前市场最适合的策略">🤖 获取推荐</button>
+      </div>
+      <div id="strategyRecommendContent">
+        <p style="color:#8890b5;font-size:13px;">点击按钮获取 AI 策略推荐</p>
+      </div>
+    </div>
+
+    <!-- 涨跌家数 -->
+    <div class="breadth-strip" id="breadthStrip" style="display:none;">
+      <div class="breadth-item up"><span class="breadth-label">上涨</span><span class="breadth-val" id="breadthUp">-</span></div>
+      <div class="breadth-item down"><span class="breadth-label">下跌</span><span class="breadth-val" id="breadthDown">-</span></div>
+      <div class="breadth-item flat"><span class="breadth-label">平盘</span><span class="breadth-val" id="breadthFlat">-</span></div>
+      <div class="breadth-item"><span class="breadth-label">涨停</span><span class="breadth-val" id="breadthLimitUp">-</span></div>
+      <div class="breadth-item"><span class="breadth-label">跌停</span><span class="breadth-val" id="breadthLimitDown">-</span></div>
+      <div class="breadth-bar-wrap"><div class="breadth-bar-inner" id="breadthBar"></div></div>
     </div>
 
     <!-- 指数卡片行 -->
@@ -67,10 +140,9 @@
       </div>
     </div>
 
-    <!-- 图表区: 指数走势 + 北向资金 -->
+    <!-- 图表区: 指数走势 -->
     <div class="market-charts">
       <div class="chart-main-wide" id="chartIndexTrend"></div>
-      <div class="chart-mid-sector" id="chartNorthbound" style="height:320px;"></div>
     </div>
 
     <!-- 行业涨跌 + 概念板块 -->
@@ -102,11 +174,36 @@
       <button class="tag active" data-period="365">1年</button>
       <button class="tag" data-period="500">2年</button>
       <span class="sep">|</span>
-      <label><input type="checkbox" class="ind-toggle" data-ind="ma" checked /> 均线</label>
-      <label><input type="checkbox" class="ind-toggle" data-ind="boll" /> 布林</label>
-      <label><input type="checkbox" class="ind-toggle" data-ind="macd" checked /> MACD</label>
-      <label><input type="checkbox" class="ind-toggle" data-ind="rsi" /> RSI</label>
-      <label><input type="checkbox" class="ind-toggle" data-ind="kdj" /> KDJ</label>
+      <label title="一段时间内的平均价格，用来判断趋势方向。多条均线排列向上=趋势好"><input type="checkbox" class="ind-toggle" data-ind="ma" checked /> 均线</label>
+      <label title="价格波动的"通道"，触及上轨可能超买、下轨可能超卖"><input type="checkbox" class="ind-toggle" data-ind="boll" /> 布林</label>
+      <label title="判断趋势变强还是变弱。DIF上穿DEA=金叉看涨，下穿=死叉看跌"><input type="checkbox" class="ind-toggle" data-ind="macd" checked /> MACD</label>
+      <label title="判断股票是否'涨过头'(>70超买)或'跌过头'(<30超卖)"><input type="checkbox" class="ind-toggle" data-ind="rsi" /> RSI</label>
+      <label title="随机指标，综合判断买卖力度。K线穿D线=短期买卖点"><input type="checkbox" class="ind-toggle" data-ind="kdj" /> KDJ</label>
+      <span class="sep">|</span>
+      <label title="交易时段每30秒自动刷新K线和技术指标，保持数据最新"><input type="checkbox" id="stockAutoRefresh" /> 实时刷新</label>
+    </div>
+
+    <!-- 实时信号条 -->
+    <div id="signalBar" style="display:none;margin-bottom:10px;padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;align-items:center;gap:10px;">
+      <span id="signalIcon" style="font-size:22px;"></span>
+      <span id="signalText"></span>
+      <span id="signalDetail" style="font-size:11px;color:#8890b5;font-weight:400;"></span>
+    </div>
+
+    <!-- 仓位建议卡片 (Phase 5) -->
+    <div class="advice-card" id="adviceCard" style="display:none;">
+      <div style="display:flex;align-items:center;gap:16px;width:100%;">
+        <div class="advice-action" id="adviceAction">--</div>
+        <div class="advice-info" style="flex:1;">
+          <div class="advice-pct" id="advicePct">--</div>
+          <div class="advice-reason" id="adviceReason"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+          <span class="advice-confidence" id="adviceConfidence"></span>
+          <button class="ai-explain-btn" id="btnAIAdvice" style="display:none;" title="让 AI 分析仓位策略">🤖 AI 仓位分析</button>
+        </div>
+      </div>
+      <div id="aiAdviceText" style="display:none;margin-top:12px;padding:14px;background:rgba(99,102,241,.06);border-radius:10px;font-size:13px;color:#c8cdf0;line-height:1.7;"></div>
     </div>
 
     <!-- 白话解读 -->
@@ -120,13 +217,51 @@
 
     <!-- 评分速览 -->
     <div class="score-strip" id="stockScore" style="display:none;">
-      <div class="score-item"><span class="sLabel">趋势评分</span><span class="sVal" id="sTrend">-</span></div>
-      <div class="score-item"><span class="sLabel">动量评分</span><span class="sVal" id="sMomentum">-</span></div>
-      <div class="score-item"><span class="sLabel">成交量</span><span class="sVal" id="sVolume">-</span></div>
-      <div class="score-item"><span class="sLabel">综合评级</span><span class="sVal" id="sOverall">-</span></div>
+      <div class="score-item"><span class="sLabel" title="股票在近期的相对位置——在低位(得分高)=买入成本低，在高位(得分低)=追高风险大">趋势评分</span><span class="sVal" id="sTrend">-</span></div>
+      <div class="score-item"><span class="sLabel" title="上涨动能有多强。量价齐升=高动能，缩量阴跌=低动能">动量评分</span><span class="sVal" id="sMomentum">-</span></div>
+      <div class="score-item"><span class="sLabel" title="成交量是否配合。放量上涨=资金认可，缩量上涨=可能有水分">成交量</span><span class="sVal" id="sVolume">-</span></div>
+      <div class="score-item"><span class="sLabel" title="综合三项评分，60分以上=值得关注，40-60=待观察，<40=谨慎">综合评级</span><span class="sVal" id="sOverall">-</span></div>
+    </div>
+
+    <!-- 进阶指标卡片 (Phase 3) -->
+    <div class="enhanced-metrics" id="enhancedMetrics" style="display:none;">
+      <div class="em-header">
+        <h3>📊 进阶指标</h3>
+        <button class="ai-explain-btn" id="btnAIStockAnalysis" style="display:none;" title="让 AI 深度分析这只股票的技术面">🤖 AI 深度分析</button>
+      </div>
+      <div class="em-grid">
+        <div class="em-item" title="当前价格在52周最高价和最低价之间的位置">
+          <span class="em-label">52周位置</span>
+          <div class="em-bar-wrap"><div class="em-bar-fill" id="em52wBar"></div></div>
+          <span class="em-val" id="em52wVal">-</span>
+        </div>
+        <div class="em-item" title="当前波动率在历史1年中的分位数，数值越高说明近期波动越大">
+          <span class="em-label">波动率分位</span>
+          <span class="em-val" id="emVol">-</span>
+        </div>
+        <div class="em-item" title="当前成交量/20日均量，>1.2放量，<0.7缩量">
+          <span class="em-label">量比</span>
+          <span class="em-val" id="emVolRatio">-</span>
+        </div>
+        <div class="em-item" title="相对上证指数的波动倍数，>1波动比大盘大，<1比大盘稳">
+          <span class="em-label">Beta</span>
+          <span class="em-val" id="emBeta">-</span>
+        </div>
+      </div>
+      <div id="aiStockAnalysisText" style="display:none;margin-top:12px;padding:14px;background:rgba(99,102,241,.06);border-radius:10px;font-size:13px;color:#c8cdf0;line-height:1.7;"></div>
     </div>
 
     <div class="chart-container">
+      <!-- K线图怎么看？ -->
+      <div id="klineGuideToggle" style="margin-bottom:6px;font-size:11px;color:#5f6b8a;cursor:pointer;">
+        📖 怎么看K线图？点击展开 ▼
+      </div>
+      <div style="display:none;margin-bottom:10px;padding:10px 14px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.12);border-radius:8px;font-size:12px;color:#8890b5;line-height:1.8;">
+        <b style="color:#c8cdf0;">K线（蜡烛图）</b> = 一根柱子显示四个价格：开盘、收盘、最高、最低。<br>
+        <span style="color:#ef4444;">🔴红柱</span> = 收盘价高于开盘价（涨了），<span style="color:#22c55e;">🟢绿柱</span> = 收盘价低于开盘价（跌了）。<br>
+        <b style="color:#c8cdf0;">柱体越长</b> = 多空争夺越激烈。<b style="color:#c8cdf0;">上下影线</b> = 盘中曾经到过但没守住的价格。<br>
+        <span style="color:#5f6b8a;">下方MACD柱 ↗ = 上涨动能增强，↘ = 动能减弱。RSI线 > 70 = 短期偏贵，&lt; 30 = 短期便宜。</span>
+      </div>
       <div id="chartStockKline" class="chart-main"></div>
       <div id="chartStockMacd" class="chart-sub"></div>
       <div id="chartStockRsi" class="chart-sub"></div>
@@ -155,42 +290,129 @@
     </div>
   </section>
 
+  <!-- ==================== 组合分析 ==================== -->
+  <section id="page-portfolio" class="page">
+    <div class="plain-explain" style="margin:0 0 14px;padding:10px 16px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:8px;">
+      <span style="color:#818cf8;font-weight:600;">💡 组合分析：</span>
+      输入多只股票代码，分析组合的风险收益特征。
+      <span style="color:#5f6b8a;">不要把鸡蛋放在一个篮子里——分散投资降低风险。</span>
+    </div>
+
+    <div class="chart-toolbar">
+      <input type="text" id="portfolioCodes" placeholder="股票代码，逗号分隔" value="000001,600519,300750" style="width:280px;" />
+      <button id="btnAnalyzePortfolio">分析组合</button>
+    </div>
+
+    <!-- 组合概览 -->
+    <div class="card" id="portfolioSummary" style="display:none;">
+      <h3>📊 组合概览</h3>
+      <div id="portfolioSummaryContent"></div>
+    </div>
+
+    <!-- 个股详情 -->
+    <div class="card" id="portfolioStocks" style="display:none;margin-top:12px;">
+      <h3>📋 个股详情</h3>
+      <div id="portfolioStocksContent"></div>
+    </div>
+
+    <!-- AI 组合建议 -->
+    <div class="card" id="portfolioAI" style="display:none;margin-top:12px;">
+      <h3>🤖 AI 组合建议</h3>
+      <div id="portfolioAIContent"></div>
+    </div>
+  </section>
+
   <!-- ==================== 策略回测 ==================== -->
   <section id="page-backtest" class="page">
-    <div class="chart-toolbar">
-      <input type="text" id="btCode" placeholder="股票代码" value="600519" />
-      <select id="btStrategy">
-        <option value="maCrossStrategy">双均线策略</option>
-        <option value="macdStrategy">MACD策略</option>
-        <option value="rsiStrategy">RSI超买超卖</option>
-        <option value="bollStrategy">布林带策略</option>
-        <option value="multiFactorStrategy">多因子综合</option>
+    <!-- 白话引导 -->
+    <div class="plain-explain" style="margin:0 0 14px;padding:10px 16px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:8px;">
+      <span style="color:#818cf8;font-weight:600;">💡 简单说：</span>
+      回测就是用<b>历史数据模拟你的买卖策略</b>，看它过去能不能赚钱。
+      <span style="color:#5f6b8a;">就像考前做真题——如果过去都考不好，实战也很难翻盘。</span>
+      <span style="color:#5f6b8a;margin-left:8px;cursor:help;" title="回测原理：对历史每一天按策略规则判断是否该买卖。买：按收盘价成交；卖：按收盘价成交。最后统计总收益、胜率、最大回撤等指标。限制：①不考虑日内波动 ②不考虑流动性 ③过去好≠未来好。">ⓘ 回测准吗？</span>
+    </div>
+    <div class="chart-toolbar" style="flex-wrap:wrap;gap:8px;">
+      <input type="text" id="btCode" placeholder="股票代码" value="600519" style="width:100px;" />
+      <select id="btStrategy" style="width:170px;">
+        <option value="maCrossStrategy" title="价格突破5日/20日均线时买卖。适合趋势明显的行情，横盘震荡时容易频繁止损。">双均线 (MA5↗MA20)</option>
+        <option value="macdStrategy" title="DIF线穿越DEA线触发买卖。比均线反应快，但偶尔会有假信号。适合捕捉中短期波动。">MACD金叉 (捕捉转折)</option>
+        <option value="rsiStrategy" title="RSI跌破30超卖区回升时买入，升破70回落时卖出。适合震荡市抄底逃顶。">RSI超买超卖 (抄底逃顶)</option>
+        <option value="bollStrategy" title="价格触及布林下轨后反弹买入，触及上轨回落卖出。适合波动收敛后的突破行情。">布林带 (上下轨突破)</option>
+        <option value="multiFactorStrategy" title="同时参考MA+MACD+RSI三个信号加权投票，≥2个信号一致才交易。比单一策略更稳妥。">多因子综合 (三指标投票)</option>
+        <option value="trendFollowingStrategy" title="价格站上60日均线就持有，跌破就卖出。适合牛熊单边行情，震荡市容易反复进出。">趋势跟踪 (站上MA60就买)</option>
+        <option value="breakoutStrategy" title="突破20日最高价时买入，跌破10日最低价卖出。专做突破行情。">突破策略 (追涨杀跌)</option>
       </select>
-      <input type="number" id="btDays" value="365" style="width:80px" /> 天
-      <button id="btnBacktest">运行回测</button>
+      <span style="font-size:11px;color:#4b5563;">周期：</span>
+      <button class="btn btn-outline btn-xs bt-period-btn" data-days="90" title="最近3个月的数据，看策略短期表现">3个月</button>
+      <button class="btn btn-outline btn-xs bt-period-btn active" data-days="365" title="最近1年，看策略经历不同市场环境的表现">1年</button>
+      <button class="btn btn-outline btn-xs bt-period-btn" data-days="750" title="最近3年，更全面地检验策略稳定性">3年</button>
+      <button class="btn btn-outline btn-xs bt-period-btn" data-days="9999" title="尽可能多的历史数据，全面回测">全部</button>
+      <button id="btnBacktest">▶ 运行回测</button>
+    </div>
+    <!-- 白话解读 -->
+    <div class="bt-insight" id="btInsight" style="display:none;">
+      <div class="bt-insight-icon" id="btInsightIcon">📊</div>
+      <div class="bt-insight-body">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <h3 id="btInsightTitle" style="margin:0;">策略回测结果</h3>
+          <button class="ai-explain-btn" id="btnAIExplainBT" style="display:none;" title="让 AI 深度解读这些回测指标">🤖 AI 深度解读</button>
+        </div>
+        <p id="btInsightText"></p>
+      </div>
     </div>
     <div class="bt-results" id="btResults">
-      <div class="bt-metric"><span>总收益率</span><strong id="btRet">-</strong></div>
-      <div class="bt-metric"><span>最大回撤</span><strong id="btDD">-</strong></div>
-      <div class="bt-metric"><span>夏普比率</span><strong id="btSharpe">-</strong></div>
-      <div class="bt-metric"><span>交易次数</span><strong id="btTrades">-</strong></div>
-      <div class="bt-metric"><span>胜率</span><strong id="btWinRate">-</strong></div>
-      <div class="bt-metric"><span>平均盈亏</span><strong id="btAvgPnl">-</strong></div>
-      <div class="bt-metric"><span>手续费</span><strong id="btCommission">-</strong></div>
-    </div>
-    <div class="bt-explain" id="btExplain">
-      <b>回测说明：</b> 用历史数据模拟策略交易。<b>夏普比率</b>&gt;1风险调整收益不错，<b>Calmar比率</b>越大越好。图表上<b>红色箭头</b>=买入信号，<b>绿色箭头</b>=卖出信号。权益曲线上的<b>圆点</b>标注了买卖点。
+      <!-- 核心指标 (始终显示) -->
+      <div class="bt-metric core"><span title="策略总收益 - 扣掉手续费后的净值增长。正数=赚钱 负数=亏钱">总收益率</span><strong id="btRet">-</strong></div>
+      <div class="bt-metric core"><span title="同期如果只是买入不动能赚多少，作为对比基准">持有不动</span><strong id="btBench">-</strong></div>
+      <div class="bt-metric core"><span title="历史上最惨的时候亏了多少。这是最重要的风控指标，越小越好。">最大回撤</span><strong id="btDD">-</strong></div>
+      <div class="bt-metric core"><span title="每冒1块钱的风险能赚几块。>1算及格，>2算优秀。就像开车，快但稳才是好司机。">夏普比率</span><strong id="btSharpe">-</strong></div>
+      <div class="bt-metric core"><span title="一共买卖了多少次。太少=策略太保守，太多=可能过度交易。">交易次数</span><strong id="btTrades">-</strong></div>
+      <div class="bt-metric core"><span title="赚钱的交易占比。60%=10笔赚6笔。但胜率不是全部——亏的可能是小亏，赚的是大赚。">胜率</span><strong id="btWinRate">-</strong></div>
+      <!-- 展开更多 -->
+      <div id="btMoreMetrics" style="display:none;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:8px;grid-column:1/-1;">
+        <div class="bt-metric"><span title="折算成一年的收益率，方便横向对比">年化收益</span><strong id="btAnnual">-</strong></div>
+        <div class="bt-metric"><span title="赚钱时平均赚多少 vs 亏钱时平均亏多少。>1.5:1 算良好">盈亏比</span><strong id="btWinLoss">-</strong></div>
+        <div class="bt-metric"><span title="所有交易的平均盈亏百分比">平均盈亏</span><strong id="btAvgPnl">-</strong></div>
+        <div class="bt-metric"><span title="平均每笔买卖持有几天。短线=<1周，中线=1~4周，长线=>1月">平均持仓</span><strong id="btHoldDays">-</strong></div>
+        <div class="bt-metric"><span title="亏损最大的那个时间段">回撤区间</span><strong id="btDDPeriod">-</strong></div>
+        <div class="bt-metric"><span title="买卖产生的手续费和印花税(模拟千分之1.5)">手续费</span><strong id="btCommission">-</strong></div>
+      </div>
+      <div style="text-align:center;grid-column:1/-1;margin-top:4px;">
+        <button class="btn btn-outline btn-xs" id="btToggleMore" style="display:none;">📋 查看更多指标</button>
+        <button class="btn btn-outline btn-xs" id="btLessMetrics" style="display:none;">📋 收起</button>
+      </div>
     </div>
     <div class="chart-main" id="chartEquity"></div>
+    <div style="margin-top:8px;font-size:11px;color:#4b5563;">
+      📈 紫线=你的策略权益走势 · 🟡虚黄线=买入不动 · 🔴红点=买入信号 · 🟢绿点=卖出信号
+    </div>
     <div class="card" id="btTradeList" style="max-height:300px;overflow-y:auto;margin-top:12px;"></div>
   </section>
 
   <!-- ==================== 策略对比 ==================== -->
   <section id="page-compare" class="page">
-    <div class="chart-toolbar">
-      <input type="text" id="cmpCode" placeholder="股票代码" value="600519" />
-      <button id="btnCompare">对比所有策略</button>
+    <!-- 白话引导 -->
+    <div class="plain-explain" style="margin:0 0 14px;padding:10px 16px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:8px;">
+      <span style="color:#818cf8;font-weight:600;">💡 简单说：</span>
+      同一只股票，用<b>7种不同策略各自回测一遍</b>，横向比较谁赚得又多又稳。
+      <span style="color:#5f6b8a;">就像买车前横向试驾对比——总有一款更适合这只股票的性格。</span>
     </div>
+    <div class="chart-toolbar">
+      <input type="text" id="cmpCode" placeholder="股票代码" value="600519" style="width:110px;" />
+      <span style="font-size:11px;color:#4b5563;">回测周期：</span>
+      <button class="btn btn-outline btn-xs cmp-period-btn active" data-days="365" title="最近1年的策略对比">1年</button>
+      <button class="btn btn-outline btn-xs cmp-period-btn" data-days="750" title="最近3年，看长期表现">3年</button>
+      <button class="btn btn-outline btn-xs cmp-period-btn" data-days="9999" title="全部可用历史数据">全部</button>
+      <button id="btnCompare">▶ 对比所有策略</button>
+    </div>
+    <div class="cmp-insight" id="cmpInsight" style="display:none;">
+      <div class="cmp-insight-icon">🏆</div>
+      <div class="cmp-insight-body">
+        <h3 id="cmpInsightTitle">最佳策略分析</h3>
+        <p id="cmpInsightText"></p>
+      </div>
+    </div>
+    <div class="chart-mid-sector" id="chartCmpBar" style="height:320px;"></div>
     <div id="cmpResults" class="cmp-grid"></div>
   </section>
 
@@ -199,7 +421,12 @@
     <div class="chart-toolbar">
       <input type="text" id="ffCode" placeholder="输入股票代码" value="600519" />
       <button id="btnLoadFF">查看资金流向</button>
-      <label style="cursor:pointer"><input type="checkbox" id="ffAutoRefreshCb" /> 实时刷新</label>
+      <span class="ff-timeframe-tabs">
+        <button class="ff-tf-btn active" data-tf="realtime">实时</button>
+        <button class="ff-tf-btn" data-tf="minute5">5分钟</button>
+        <button class="ff-tf-btn" data-tf="daily">日</button>
+      </span>
+      <label style="cursor:pointer"><input type="checkbox" id="ffAutoRefreshCb" /> 自动刷新</label>
       <span id="ffRefreshTime" style="font-size:12px;color:#8899a6;"></span>
       <span id="ffPrice" style="font-size:18px;font-weight:700;margin-left:auto;color:#1a73e8;"></span>
     </div>
@@ -223,6 +450,19 @@
       <div class="ff-card"><div class="ff-icon">💰</div><div class="ff-label">MFI资金指标</div><div class="ff-value" id="ffMFI">-</div><div class="ff-hint">>80超买 / <20超卖</div></div>
     </div>
 
+    <!-- 流速指示器 -->
+    <div class="live-flow-row" id="liveFlowRow"></div>
+
+    <!-- 实时K线叠加资金流 (新增) -->
+    <div style="margin-top:12px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-weight:700;color:#c8cdf0;">📈 实时走势 + 资金流</span>
+        <span style="font-size:11px;color:#5f6b8a;" title="上半部分：盘中价格走势（含面积填充）；中部：每分钟主力资金净流向（红=流入/绿=流出）；底部：成交量。三者结合可判断价格与资金的配合关系。">ⓘ 怎么看？</span>
+        <span id="ffRtStatus" style="font-size:10px;color:#4b5563;margin-left:auto;"></span>
+      </div>
+      <div class="chart-main" id="chartFFRealtime" style="height:420px;"></div>
+    </div>
+
     <div class="ff-charts">
       <div class="chart-main" id="chartFFDaily"></div>
       <div class="chart-main" id="chartFFVWAP"></div>
@@ -232,15 +472,374 @@
 
   <!-- ==================== 批量选股 ==================== -->
   <section id="page-scan" class="page">
-    <div class="chart-toolbar">
-      <button id="btnScan">开始批量扫描</button>
-      <span class="hint">扫描股票池中30只股票，按技术面评分从高到低排序</span>
+    <!-- 白话解读 -->
+    <div class="plain-explain" style="margin:0 0 16px;padding:10px 16px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;">
+      <span style="color:#818cf8;font-weight:600;">💡 简单说：</span>
+      系统从 <b id="scanPoolSize">60+</b> 只股票中，根据技术指标自动筛选出最符合条件的股票。
+      得分越高 = 技术面信号越强。点击结果行可直接查看该股票的详细分析。
+      <span style="color:#5f6b8a;margin-left:8px;cursor:help;" title="扫描原理：对每只股票计算MACD金叉、均线趋势、量价配合、RSI强度、资金流向等指标，综合评分后排序。就像用筛子把符合技术条件的股票筛出来。">ⓘ 扫描逻辑是什么？</span>
     </div>
-    <div id="scanProgress" style="display:none;"><div class="progress-bar"><div class="progress-fill"></div></div></div>
+
+    <!-- 自然语言选股 -->
+    <div id="nlScreenRow" style="display:none;margin:0 0 16px;padding:14px 18px;background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.15);border-radius:12px;">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <span style="color:#a5b4fc;font-weight:600;white-space:nowrap;">🤖 用大白话选股：</span>
+        <input type="text" id="nlScreenInput"
+          placeholder="例：找最近放量上涨的新能源股、推荐几只ETF定投、低估值的银行股..."
+          style="flex:1;min-width:200px;padding:10px 16px;border:1px solid rgba(99,102,241,.3);border-radius:10px;background:rgba(255,255,255,.04);color:#e0e4f0;font-size:14px;outline:none;" />
+        <button id="btnNLScreen" class="btn" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;padding:10px 18px;border-radius:10px;border:none;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
+          🔍 AI 筛选
+        </button>
+      </div>
+      <!-- AI智能推荐高级选项 -->
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+        <button id="btnAIPick" class="btn" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;padding:10px 18px;border-radius:10px;border:none;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;" title="AI综合分析技术、资金、因子、风险四个维度，选出优质股">
+          ⭐ AI 智能推荐
+        </button>
+        <select id="aiPickStyle" style="padding:8px 12px;border:1px solid rgba(245,158,11,.3);border-radius:8px;background:rgba(255,255,255,.04);color:#e0e4f0;font-size:12px;outline:none;cursor:pointer;">
+          <option value="balanced">均衡型（推荐）</option>
+          <option value="momentum">动量型（追涨）</option>
+          <option value="value">价值型（低估）</option>
+          <option value="growth">成长型（高增长）</option>
+          <option value="safety">安全型（稳健）</option>
+          <option value="aggressive">激进型（高收益）</option>
+        </select>
+        <select id="aiPickIndustry" style="padding:8px 12px;border:1px solid rgba(245,158,11,.3);border-radius:8px;background:rgba(255,255,255,.04);color:#e0e4f0;font-size:12px;outline:none;cursor:pointer;">
+          <option value="">不限行业</option>
+          <option value="金融">金融（银行/保险/券商）</option>
+          <option value="消费">消费（白酒/食品/家电）</option>
+          <option value="科技">科技（电子/通信/芯片）</option>
+          <option value="医药">医药（医疗/生物/制药）</option>
+          <option value="新能源">新能源（光伏/电池/锂电）</option>
+          <option value="制造">制造（工业/机械）</option>
+          <option value="周期">周期（煤炭/有色/钢铁）</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;color:#e0e4f0;" title="ETF是指数基金，适合看好行业但不想选个股的用户">
+          <input type="checkbox" id="aiPickIncludeETF" checked style="accent-color:#f59e0b;" />
+          <span style="color:#8890b5;">含ETF</span>
+        </label>
+      </div>
+      <div id="nlUnderstood" style="margin-top:8px;font-size:12px;color:#8890b5;display:none;"></div>
+    </div>
+
+    <!-- 扫描模式选择 -->
+    <div class="chart-toolbar" style="flex-wrap:wrap;gap:10px;">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <span style="font-size:12px;color:#8890b5;">扫描模式：</span>
+        <button class="scan-mode-btn active" data-mode="strong" title="找MACD金叉+均线多头排列+量价突破的强势股，适合追涨">
+          🔥 找强势股<div class="scan-mode-hint">金叉+突破</div>
+        </button>
+        <button class="scan-mode-btn" data-mode="oversold" title="找RSI超卖+大幅回调后企稳反弹的超跌机会，适合抄底">
+          📉 找超跌反弹<div class="scan-mode-hint">超卖+企稳</div>
+        </button>
+        <button class="scan-mode-btn" data-mode="volume" title="找成交量激增+价格突破+资金关注的放量启动股">
+          📊 找放量突破<div class="scan-mode-hint">量价+资金</div>
+        </button>
+        <button class="scan-mode-btn" data-mode="all" title="综合所有技术指标全面评分，不偏向任何单一策略">
+          🔬 全面扫描<div class="scan-mode-hint">综合评分</div>
+        </button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-left:auto;">
+        <span style="font-size:11px;color:#5f6b8a;">最低分：</span>
+        <select id="scanMinScore" style="width:80px;padding:4px 8px;background:#1a1d2e;border:1px solid #2a2d3e;color:#c8cdf0;border-radius:4px;font-size:12px;">
+          <option value="20">20分</option>
+          <option value="25">25分</option>
+          <option value="30" selected>30分</option>
+          <option value="40">40分</option>
+          <option value="50">50分</option>
+        </select>
+        <select id="scanLimit" style="width:85px;padding:4px 8px;background:#1a1d2e;border:1px solid #2a2d3e;color:#c8cdf0;border-radius:4px;font-size:12px;">
+          <option value="15">最多15只</option>
+          <option value="30" selected>最多30只</option>
+          <option value="50">最多50只</option>
+        </select>
+        <button id="btnScan" class="btn" style="background:#6366f1;color:#fff;padding:8px 20px;font-weight:600;">🔍 开始扫描</button>
+      </div>
+    </div>
+
+    <div id="scanProgress" style="display:none;margin:12px 0;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="progress-bar" style="flex:1;"><div class="progress-fill" style="width:0%;transition:width 0.3s;"></div></div>
+        <span id="scanProgressText" style="font-size:12px;color:#8890b5;">扫描中...</span>
+      </div>
+    </div>
+
+    <!-- 快速筛选预设按钮 (保留) -->
+    <div style="margin:8px 0 12px;display:flex;gap:6px;align-items:center;">
+      <span style="font-size:11px;color:#4b5563;">快捷预设：</span>
+      <button class="btn btn-outline btn-xs" data-preset="strong" title="找MACD金叉+均线多头排列的强势股">找强势股</button>
+      <button class="btn btn-outline btn-xs" data-preset="oversold" title="找RSI超卖+布林下轨的超跌反弹机会">找超跌股</button>
+      <button class="btn btn-outline btn-xs" data-preset="volume" title="找成交量放大+价格突破的放量股">找放量股</button>
+      <span id="scanStatusHint" style="font-size:11px;color:#5f6b8a;margin-left:12px;"></span>
+    </div>
+
+    <!-- AI 智能推荐结果 -->
+    <div id="aiPickResults" style="display:none;margin:16px 0;padding:20px;background:linear-gradient(135deg,rgba(245,158,11,.06),rgba(217,119,6,.04));border:1px solid rgba(245,158,11,.2);border-radius:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <span style="font-size:18px;">⭐</span>
+        <span style="font-weight:700;color:#fbbf24;font-size:15px;">AI 智能推荐</span>
+        <span id="aiPickUnderstanding" style="font-size:12px;color:#92400e;margin-left:8px;"></span>
+      </div>
+      <div id="aiPickMarketAnalysis" style="display:none;"></div>
+      <div id="aiPickCards" style="display:flex;flex-direction:column;gap:12px;"></div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(245,158,11,.15);font-size:11px;color:#92400e;">
+        ⚠️ 以上分析仅供参考，不构成投资建议
+      </div>
+    </div>
+
     <div id="scanResults" class="card"></div>
+  </section>
+
+  <!-- ==================== 基金板块 (支付宝风格) ==================== -->
+  <section id="page-fund" class="page">
+    <div class="plain-explain" style="margin:0 0 14px;padding:10px 16px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:8px;">
+      <span style="color:#818cf8;font-weight:600;">💡 简单说：</span>
+      <b>钱往哪流，行情就往哪走。</b>通过行业资金流向来判断基金板块热度，结合历史收益找到值得关注的基金。
+      <span style="color:#5f6b8a;">就像看水流知道哪里会涨潮——资金持续流入的板块，相关基金表现往往更好。</span>
+    </div>
+
+    <!-- 基金板块资金流向卡片 -->
+    <h3 style="margin-bottom:10px;color:#c8cdf0;">📊 基金板块资金流向</h3>
+    <div class="fund-sector-grid" id="fundSectorGrid">加载中...</div>
+
+    <!-- ETF 板块资金流向 -->
+    <div class="card" style="margin-top:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <h3 style="margin:0;">📡 ETF 板块实时资金</h3>
+        <span style="font-size:11px;color:#5f6b8a;">主力净流入排序 · 点击ETF代码查看详情</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="etf-flow-table" id="etfFlowTable">
+          <thead><tr>
+            <th>板块</th><th>涨跌幅</th><th>主力净流入</th><th>超大单</th><th>大单</th><th>主力占比</th><th>关联ETF</th>
+          </tr></thead>
+          <tbody id="etfFlowBody"><tr><td colspan="7" style="text-align:center;color:#5f6b8a;">加载中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- AI 推荐 -->
+    <div id="fundAIRecommend" style="display:none;margin:14px 0;padding:16px 20px;background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.06));border:1px solid rgba(99,102,241,.15);border-radius:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-weight:600;color:#a5b4fc;">🤖 AI 基金推荐</span>
+        <span style="font-size:11px;color:#5f6b8a;">基于资金流向+历史收益分析</span>
+      </div>
+      <div id="fundAIRecommendText" style="font-size:13px;color:#c8cdf0;line-height:1.7;"></div>
+    </div>
+
+    <!-- 热门基金排行 -->
+    <div class="card" style="margin-top:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <h3 style="margin:0;">🏆 热门基金排行</h3>
+        <div class="fund-search-wrap">
+          <input type="text" class="fund-search-input" id="fundSearchInput" placeholder="搜索基金名称或代码...">
+          <div class="fund-search-dropdown" id="fundSearchDropdown" style="display:none;"></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="fund-type-btn active" data-ft="all">全部</button>
+          <button class="fund-type-btn" data-ft="gp">股票型</button>
+          <button class="fund-type-btn" data-ft="hh">混合型</button>
+          <button class="fund-type-btn" data-ft="zs">指数型</button>
+          <button class="fund-type-btn" data-ft="zq">债券型</button>
+        </div>
+        <div style="display:flex;gap:4px;">
+          <button class="fund-sort-btn active" data-sort="1y">近1年</button>
+          <button class="fund-sort-btn" data-sort="6m">6个月</button>
+          <button class="fund-sort-btn" data-sort="3m">3个月</button>
+          <button class="fund-sort-btn" data-sort="1m">1个月</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="fund-rank-table" id="fundRankTable">
+          <thead><tr>
+            <th>#</th><th>基金名称</th><th>最新净值</th><th>日涨跌</th><th>近1月</th><th>近3月</th><th>近6月</th><th>近1年</th><th>规模(亿)</th>
+          </tr></thead>
+          <tbody id="fundRankBody"><tr><td colspan="9" style="text-align:center;color:#5f6b8a;">加载中...</td></tr></tbody>
+        </table>
+      </div>
+      <div style="text-align:center;margin-top:8px;font-size:11px;color:#5f6b8a;" id="fundRankFooter"></div>
+    </div>
+
+    <!-- 基金详情弹窗 -->
+    <div class="fund-detail-overlay" id="fundDetailOverlay" style="display:none;">
+      <div class="fund-detail-modal">
+        <div class="fund-detail-header">
+          <h3 id="fundDetailTitle">📈 基金详情</h3>
+          <button class="fund-detail-close" id="btnFundDetailClose">✕</button>
+        </div>
+        <div class="fund-detail-signal" id="fundDetailSignal" style="display:none;"></div>
+        <div class="fund-detail-intraday" id="fundDetailIntraday">
+          <div class="fdi-header">
+            <span class="fdi-title">⚡ 实时估算</span>
+            <span class="fdi-time" id="fdiUpdateTime"></span>
+            <span class="fdi-badge" id="fdiBadge"></span>
+          </div>
+          <div class="chart-main" id="chartFundIntraday" style="height:220px;"></div>
+        </div>
+        <div class="fund-detail-charts">
+          <div class="chart-main" id="chartFundNAV" style="height:360px;"></div>
+          <div class="chart-sub" id="chartFundMACD" style="height:140px;"></div>
+          <div class="chart-sub" id="chartFundRSI" style="height:140px;"></div>
+        </div>
+        <div class="fund-detail-info" id="fundDetailInfo"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 风控中心 ==================== -->
+  <section id="page-risk" class="page">
+    <!-- 白话引导 -->
+    <div class="plain-explain" style="margin:0 0 14px;padding:10px 16px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.15);border-radius:8px;">
+      <span style="color:#818cf8;font-weight:600;">💡 简单说：</span>
+      这里是你的<b>投资安全舱</b>——管理持仓、控制仓位、应对极端行情。
+      <span style="color:#5f6b8a;">就像开车的仪表盘，告诉你速度(仓位)合不合适、水温(风险)高不高、该不该踩刹车(止损)。</span>
+    </div>
+    <!-- 总资产仪表盘 -->
+    <div class="risk-hero">
+      <div class="risk-hero-card" title="账户当前总价值 = 现金 + 持仓市值">
+        <div class="risk-hero-label">总资产</div>
+        <div class="risk-hero-value" id="riskHeroEquity">--</div>
+        <div class="risk-hero-sub">初始资金 100 万</div>
+      </div>
+      <div class="risk-hero-card" title="今天赚了还是亏了（相比昨天收盘）">
+        <div class="risk-hero-label">今日盈亏</div>
+        <div class="risk-hero-value" id="riskHeroDaily">--</div>
+        <div class="risk-hero-sub" id="riskHeroDailyPct"></div>
+      </div>
+      <div class="risk-hero-card" title="从开始到现在总共赚了多少">
+        <div class="risk-hero-label">总收益率</div>
+        <div class="risk-hero-value" id="riskHeroTotal">--</div>
+        <div class="risk-hero-sub" id="riskHeroTotalAmt"></div>
+      </div>
+      <div class="risk-hero-card" title="持仓市值占总资产的比例">
+        <div class="risk-hero-label">当前仓位</div>
+        <div class="risk-hero-value" id="riskHeroPos">--</div>
+        <div class="risk-hero-sub">持仓 <span id="riskHeroCount">0</span> 只股票</div>
+      </div>
+      <div class="risk-hero-card risk-alert-card" id="riskHeroAlert" style="display:none;" title="需要立即关注的风险警告">
+        <div class="risk-hero-label">⚠️ 预警</div>
+        <div class="risk-hero-value" id="riskHeroAlertCount" style="color:#fbbf24;">0</div>
+        <div class="risk-hero-sub">条待处理</div>
+      </div>
+    </div>
+
+    <!-- 风控等级 + 总览 -->
+    <div class="risk-quick-row">
+      <div class="card risk-level-card">
+        <h3>我的风控等级</h3>
+        <div class="risk-level-btns">
+          <button class="risk-lvl-btn" data-level="conservative" title="适合不想亏太多钱的稳健投资者。每只股票最多买10%，总仓位不超过50%，剩下50%现金保底。">🛡️ 保守型<div class="risk-lvl-hint">单股≤10% · 总仓≤50%</div></button>
+          <button class="risk-lvl-btn active" data-level="balanced" title="适合大多数投资者的平衡方案。单只股票不超过20%，总仓位不超过80%，留20%现金应对突发。">⚖️ 平衡型<div class="risk-lvl-hint">单股≤20% · 总仓≤80%</div></button>
+          <button class="risk-lvl-btn" data-level="aggressive" title="适合愿意冒较大风险追求高收益的投资者。几乎满仓操作，回撤可能较大。">🚀 激进型<div class="risk-lvl-hint">单股≤30% · 总仓≤95%</div></button>
+        </div>
+        <div id="chartRiskExposure" class="chart-mid-sector" style="height:160px;"></div>
+      </div>
+      <div class="card risk-alert-card-col">
+        <h3>实时预警 <span style="font-size:11px;color:#5f6b8a;">· 后台自动扫描</span></h3>
+        <div class="alert-feed" id="alertFeedBox">
+          <div id="alertList" style="color:#5f6b8a;text-align:center;padding:20px;">暂无预警，一切正常 ✓</div>
+        </div>
+        <button id="btnClearAlerts" class="small-btn" style="margin-top:8px;">清空预警记录</button>
+      </div>
+    </div>
+
+    <!-- 我的持仓 -->
+    <div class="card" style="margin-bottom:14px;">
+      <h3>我的持仓 <span style="font-size:11px;color:#5f6b8a;">· 输入代码自动填价</span></h3>
+      <div class="pos-input-row">
+        <input type="text" id="posCode" placeholder="输入股票代码，如 600519" class="pos-input" />
+        <input type="number" id="posShares" placeholder="买入股数" class="pos-input pos-input-sm" />
+        <input type="number" id="posPrice" placeholder="价格（自动填）" step="0.01" class="pos-input pos-input-sm" />
+        <button id="btnOpenPos" class="pos-btn-buy">买入</button>
+      </div>
+      <div id="posList" style="margin-top:10px;">
+        <div style="color:#5f6b8a;text-align:center;padding:20px;">还没有持仓，在上方输入股票代码开始</div>
+      </div>
+    </div>
+
+    <!-- 折叠区: 高级功能 -->
+    <div class="risk-advanced">
+      <div class="risk-fold" data-fold="limits">
+        <div class="risk-fold-head">交易前检查 · 我的股票能买吗？<span class="risk-fold-arrow">▸</span></div>
+        <div class="risk-fold-body" style="display:none;">
+          <div class="stock-check-row">
+            <input type="text" id="riskCheckCode" placeholder="输入股票代码" class="pos-input" />
+            <button id="btnRiskCheck" class="pos-btn-buy" style="background:linear-gradient(135deg,#6366f1,#4f46e5);">检查资格</button>
+          </div>
+          <div id="riskCheckResult" style="margin-top:8px;font-size:13px;"></div>
+          <div class="limit-toggles" id="limitToggles" style="margin-top:12px;"></div>
+          <div class="limit-sliders" id="limitSliders" style="margin-top:8px;"></div>
+          <button id="btnSaveLimits" class="action-btn">保存设置</button>
+        </div>
+      </div>
+      <div class="risk-fold" data-fold="stress">
+        <div class="risk-fold-head">如果遇到极端行情，我会亏多少？<span class="risk-fold-arrow">▸</span></div>
+        <div class="risk-fold-body" style="display:none;">
+          <div class="stress-form">
+            <select id="stressScenario" multiple style="width:100%;min-height:60px;padding:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#e0e4f0;font-size:12px;">
+              <option value="2008金融危机">2008 金融危机（大盘跌30%）</option>
+              <option value="2015股灾">2015 股灾（大盘跌25%）</option>
+              <option value="2020疫情冲击">2020 疫情冲击（大盘跌15%）</option>
+              <option value="温和回调">温和回调（大盘跌10%）</option>
+              <option value="极端事件">极端事件（大盘跌40%）</option>
+            </select>
+            <button id="btnStressTest" class="action-btn">开始测算</button>
+          </div>
+          <div id="stressResults" style="font-size:12px;color:#8890b5;margin-top:8px;"></div>
+          <div id="chartRiskStress" class="chart-mid-sector" style="height:200px;"></div>
+        </div>
+      </div>
+      <div class="risk-fold" data-fold="report">
+        <div class="risk-fold-head">我的投资成绩单<span class="risk-fold-arrow">▸</span></div>
+        <div class="risk-fold-body" style="display:none;">
+          <div id="chartRiskPnl" class="chart-mid-sector" style="height:200px;"></div>
+          <div id="reportMetrics" style="font-size:13px;padding:12px 0;"></div>
+          <div style="display:flex;gap:8px;">
+            <button id="btnGenerateReport" class="small-btn">查看报告</button>
+            <button id="btnExportReport" class="small-btn">下载报告</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
 </div>
 
-<script src="/js/app.js"></script>
+<!-- ═══════════════════════ AI Chat ═══════════════════════ -->
+<div class="ai-chat-bubble" id="aiChatBubble" title="AI 智能助手">
+  <span class="ai-bubble-icon">🤖</span>
+</div>
+
+<div class="ai-chat-panel" id="aiChatPanel" style="display:none;">
+  <div class="ai-chat-header">
+    <span>🤖 AI 智能助手</span>
+    <div>
+      <button class="ai-chat-btn" id="btnAISettings" title="设置 API Key">⚙️</button>
+      <button class="ai-chat-btn ai-btn-close" id="btnAIClose">✕</button>
+    </div>
+  </div>
+  <div class="ai-chat-messages" id="aiChatMessages">
+    <div class="ai-chat-empty" id="aiChatWelcome">
+      <div class="ai-chat-welcome">👋 你好！我是 AI 智能助手</div>
+      <div class="ai-chat-hints">
+        <p>试试问我：</p>
+        <button class="ai-hint-btn" data-hint="帮我分析一下这只股票的走势">📊 分析股票走势</button>
+        <button class="ai-hint-btn" data-hint="MACD金叉和死叉是什么意思？">📖 解释技术指标</button>
+        <button class="ai-hint-btn" data-hint="现在市场整体情况怎么样？">📈 今日市场解读</button>
+        <button class="ai-hint-btn" data-hint="怎么使用回测功能来判断策略好坏？">❓ 平台使用帮助</button>
+      </div>
+    </div>
+  </div>
+  <div class="ai-chat-input-row">
+    <textarea id="aiChatInput" placeholder="输入你的问题..." rows="1"></textarea>
+    <button class="ai-send-btn" id="aiChatSend">➤</button>
+  </div>
+  <div class="ai-chat-footer">
+    <span class="ai-model-badge">Claude Haiku</span>
+    <span>内容仅供参考，不构成投资建议</span>
+  </div>
+</div>
+
+<script src="/js/ai-chat.js"></script>
+<script src="/js/app.js?v=30"></script>
 </body>
 </html>

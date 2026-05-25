@@ -243,10 +243,10 @@ $("#btnOptimize")?.addEventListener("click", async () => {
 
     // 统计卡片
     $("#portStats").innerHTML = `
-      <div class="port-stat-card"><div class="ps-label">年化收益</div><div class="ps-value" style="color:#f87171">${result.stats?.annualReturn || "-"}%</div></div>
-      <div class="port-stat-card"><div class="ps-label">年化波动</div><div class="ps-value">${result.stats?.annualVol || "-"}%</div></div>
-      <div class="port-stat-card"><div class="ps-label">Sharpe</div><div class="ps-value" style="color:#fbbf24">${result.stats?.sharpe || "-"}</div></div>
-      <div class="port-stat-card"><div class="ps-label">股票数</div><div class="ps-value" style="color:#94a3b8">${result.weights.filter(w=>w.weight>0.5).length}</div></div>
+      <div class="port-stat-card" title="按这个组合配置，一年预计能赚多少"><div class="ps-label">预计年收益</div><div class="ps-value" style="color:#f87171">${result.stats?.annualReturn || "-"}%</div></div>
+      <div class="port-stat-card" title="价格波动的幅度，越低越稳"><div class="ps-label">年化波动率</div><div class="ps-value">${result.stats?.annualVol || "-"}%</div></div>
+      <div class="port-stat-card" title="每承担一单位风险能赚多少，>1 算不错"><div class="ps-label">夏普比率</div><div class="ps-value" style="color:#fbbf24">${result.stats?.sharpe || "-"}</div></div>
+      <div class="port-stat-card" title="优化后实际持有几只股票"><div class="ps-label">精选股票数</div><div class="ps-value" style="color:#94a3b8">${result.weights.filter(w=>w.weight>0.5).length}</div></div>
     `;
 
     // 权重表格
@@ -323,8 +323,8 @@ $("#btnRisk")?.addEventListener("click", async () => {
       else s.lossClass = "loss-mild";
     });
 
-    $("#stressTable").innerHTML = `<h3 style="color:#c8cdf0;margin-bottom:10px;">压力测试</h3>
-      <table><thead><tr><th>情景</th><th>市场跌幅</th><th>预期损失</th><th>压力波动</th><th>压力VaR 95%</th></tr></thead>
+    $("#stressTable").innerHTML = `<h3 style="color:#c8cdf0;margin-bottom:10px;">压力测试 <span style="font-weight:400;font-size:11px;color:#5f6b8a;">— 如果历史重演，你的股票会怎样</span></h3>
+      <table><thead><tr><th>历史情景</th><th>大盘当时跌了</th><th>你的股票预计亏</th><th>压力波动</th><th>压力VaR 95%</th></tr></thead>
       <tbody>${stressScenarios.map(s => `<tr>
         <td>${s.scenario}</td><td style="color:#f87171">${s.marketDrop}</td>
         <td class="loss-cell ${s.lossClass}">${s.expectedLoss}</td>

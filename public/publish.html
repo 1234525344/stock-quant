@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一键发布</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+.pub-step { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; padding: 24px; margin-bottom: 14px; display: flex; align-items: center; gap: 16px; transition: .3s; }
+.pub-step.done { border-color: rgba(74,222,128,.4); background: rgba(74,222,128,.06); }
+.pub-step .pub-num { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg,#6366f1,#4f46e5); color: #fff; font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.pub-step.done .pub-num { background: linear-gradient(135deg,#4ade80,#22c55e); }
+.pub-step .pub-info { flex: 1; }
+.pub-step .pub-info h4 { color: #c8cdf0; margin-bottom: 2px; font-size: 15px; }
+.pub-step .pub-info p { color: #5f6b8a; font-size: 12px; }
+.pub-step .pub-btn { padding: 10px 20px; border-radius: 10px; border: 1px solid rgba(99,102,241,.3); background: rgba(99,102,241,.1); color: #818cf8; cursor: pointer; font-size: 13px; font-weight: 600; transition: .2s; white-space: nowrap; }
+.pub-step .pub-btn:hover { background: rgba(99,102,241,.2); }
+.pub-step .pub-btn.copied { background: rgba(74,222,128,.15); border-color: rgba(74,222,128,.4); color: #4ade80; }
+.progress-bar-wrap { background: rgba(255,255,255,.04); border-radius: 8px; height: 4px; margin-bottom: 24px; overflow: hidden; }
+.progress-bar-fill { height: 100%; background: linear-gradient(90deg,#6366f1,#4ade80); border-radius: 8px; transition: width .4s; }
+.content-preview { background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.06); border-radius: 12px; padding: 20px; margin-bottom: 20px; font-size: 13px; color: #8890b5; white-space: pre-wrap; line-height: 1.8; max-height: 200px; overflow-y: auto; display: none; }
+.toggle-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.toggle-tabs button { padding: 8px 16px; border-radius: 8px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); color: #8890b5; cursor: pointer; font-size: 13px; }
+.toggle-tabs button.active { background: rgba(99,102,241,.2); border-color: rgba(99,102,241,.3); color: #c8cdf0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="header">
+    <a href="/" class="logo">量化交易平台</a>
+    <nav><a href="/" class="nav-btn">← 主平台</a></nav>
+  </header>
+
+  <section style="padding:20px;max-width:700px;margin:0 auto;">
+    <h1 style="color:#e0e4f0;margin-bottom:4px;">🚀 一键发布</h1>
+    <p style="color:#8890b5;font-size:13px;margin-bottom:4px;">系统自动生成每日量化分析文章，一键复制到各大平台发布</p>
+    <p style="color:#5f6b8a;font-size:11px;margin-bottom:16px;">💡 简单说：不需要自己写文章，系统帮你生成专业分析，你只需要复制粘贴到各个平台就行</p>
+
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressBar" style="width:0%"></div></div>
+
+    <div class="toggle-tabs">
+      <button class="active" data-mode="full">📰 公众号完整版</button>
+      <button data-mode="short">📱 精简版（雪球/知乎/股吧）</button>
+    </div>
+    <div class="content-preview" id="contentPreview"></div>
+
+    <!-- 步骤 1：公众号 -->
+    <div class="pub-step" id="step1">
+      <div class="pub-num">1</div>
+      <div class="pub-info">
+        <h4>📰 微信公众号</h4>
+        <p>适合发长文分析 → 公众号后台"新建图文"→ Ctrl+V 粘贴</p>
+      </div>
+      <button class="pub-btn" data-platform="wechat" id="btn1">📋 复制</button>
+    </div>
+
+    <!-- 步骤 2：雪球 -->
+    <div class="pub-step" id="step2">
+      <div class="pub-num">2</div>
+      <div class="pub-info">
+        <h4>❄️ 雪球</h4>
+        <p>股票投资者社区 → 雪球发帖框 → Ctrl+V 粘贴</p>
+      </div>
+      <button class="pub-btn" data-platform="xueqiu" id="btn2">📋 复制</button>
+    </div>
+
+    <!-- 步骤 3：知乎 -->
+    <div class="pub-step" id="step3">
+      <div class="pub-num">3</div>
+      <div class="pub-info">
+        <h4>💡 知乎</h4>
+        <p>深度问答社区 → 找到相关问题 → 回答框 Ctrl+V 粘贴</p>
+      </div>
+      <button class="pub-btn" data-platform="zhihu" id="btn3">📋 复制</button>
+    </div>
+
+    <!-- 步骤 4：东方财富股吧 -->
+    <div class="pub-step" id="step4">
+      <div class="pub-num">4</div>
+      <div class="pub-info">
+        <h4>📊 东方财富股吧</h4>
+        <p>股民聚集地 → 搜索股票 → 发帖框 Ctrl+V 粘贴</p>
+      </div>
+      <button class="pub-btn" data-platform="guba" id="btn4">📋 复制</button>
+    </div>
+
+    <!-- 步骤 5：小红书 -->
+    <div class="pub-step" id="step5">
+      <div class="pub-num">5</div>
+      <div class="pub-info">
+        <h4>📕 小红书</h4>
+        <p>生活方式社区 → 发布笔记 → Ctrl+V 粘贴（含话题标签）</p>
+      </div>
+      <button class="pub-btn" data-platform="xiaohongshu" id="btn5">📋 复制</button>
+    </div>
+  </section>
+</div>
+
+<script>
+let currentMode = 'full';
+let articleData = null;
+
+// 加载文章
+async function loadArticle() {
+  try {
+    const resp = await fetch('/api/article/daily');
+    articleData = await resp.json();
+    updatePreview();
+  } catch(e) {
+    articleData = {
+      full: '内容加载失败，请确认服务器正在运行，然后刷新页面重试',
+      short: '内容加载失败，请确认服务器正在运行，然后刷新页面重试\n\n💡 提示：每日文章需要量化引擎运行中才能自动生成'
+    };
+    updatePreview();
+  }
+}
+
+function updatePreview() {
+  const preview = document.getElementById('contentPreview');
+  const text = currentMode === 'full' ? (articleData?.full || '') : (articleData?.short || '');
+  preview.textContent = text;
+  preview.style.display = 'block';
+}
+
+function publishTo(platform) {
+  let text = '';
+  const full = articleData?.full || '';
+  const short = articleData?.short || '';
+
+  switch(platform) {
+    case 'wechat':
+      text = full;
+      break;
+    case 'xueqiu':
+      text = short;
+      break;
+    case 'zhihu':
+      text = short + '\n\n免费量化分析工具：https://stockquant.serveousercontent.com\n#量化交易 #A股 #技术分析';
+      break;
+    case 'guba':
+      text = short + '\n\n工具地址：https://stockquant.serveousercontent.com';
+      break;
+    case 'xiaohongshu':
+      text = short + '\n\n🔗 工具：https://stockquant.serveousercontent.com\n#量化交易 #股票分析 #A股工具 #投资理财';
+      break;
+  }
+
+  copyAndMark(platform, text);
+}
+
+function copyAndMark(platform, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    // 标记完成
+    const stepMap = { wechat:1, xueqiu:2, zhihu:3, guba:4, xiaohongshu:5 };
+    const stepNum = stepMap[platform];
+    const step = document.getElementById('step'+stepNum);
+    const btn = document.getElementById('btn'+stepNum);
+    step.classList.add('done');
+    btn.textContent = '✅ 已复制';
+    btn.classList.add('copied');
+
+    // 更新进度条
+    const doneCount = document.querySelectorAll('.pub-step.done').length;
+    document.getElementById('progressBar').style.width = (doneCount/5*100) + '%';
+
+    // 打开对应平台
+    const urls = {
+      wechat: 'https://mp.weixin.qq.com',
+      xueqiu: 'https://xueqiu.com',
+      zhihu: 'https://www.zhihu.com',
+      guba: 'https://guba.eastmoney.com',
+      xiaohongshu: 'https://www.xiaohongshu.com'
+    };
+    window.open(urls[platform], '_blank');
+  }).catch(() => {
+    alert('复制失败，请手动选择文字后 Ctrl+C');
+  });
+}
+
+// 绑定事件（替代内联onclick，CSP兼容）
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.toggle-tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentMode = btn.dataset.mode;
+      document.querySelectorAll('.toggle-tabs button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updatePreview();
+    });
+  });
+  document.querySelectorAll('.pub-btn[data-platform]').forEach(btn => {
+    btn.addEventListener('click', () => publishTo(btn.dataset.platform));
+  });
+});
+
+// 页面加载时自动获取文章
+loadArticle();
+</script>
+
+<!-- ═══════════════════════ AI Chat ═══════════════════════ -->
+<div class="ai-chat-bubble" id="aiChatBubble" title="AI 智能助手">
+  <span class="ai-bubble-icon">🤖</span>
+</div>
+
+<div class="ai-chat-panel" id="aiChatPanel" style="display:none;">
+  <div class="ai-chat-header">
+    <span>🤖 AI 智能助手</span>
+    <div>
+      <button class="ai-chat-btn" id="btnAISettings" title="设置 API Key">⚙️</button>
+      <button class="ai-chat-btn ai-btn-close" id="btnAIClose">✕</button>
+    </div>
+  </div>
+  <div class="ai-chat-messages" id="aiChatMessages">
+    <div class="ai-chat-empty" id="aiChatWelcome">
+      <div class="ai-chat-welcome">👋 你好！我是 AI 智能助手</div>
+      <div class="ai-chat-hints">
+        <p>试试问我：</p>
+        <button class="ai-hint-btn" data-hint="帮我分析一下这只股票的走势">📊 分析股票走势</button>
+        <button class="ai-hint-btn" data-hint="MACD金叉和死叉是什么意思？">📖 解释技术指标</button>
+        <button class="ai-hint-btn" data-hint="现在市场整体情况怎么样？">📈 今日市场解读</button>
+        <button class="ai-hint-btn" data-hint="怎么使用回测功能来判断策略好坏？">❓ 平台使用帮助</button>
+      </div>
+    </div>
+  </div>
+  <div class="ai-chat-input-row">
+    <textarea id="aiChatInput" placeholder="输入你的问题..." rows="1"></textarea>
+    <button class="ai-send-btn" id="aiChatSend">➤</button>
+  </div>
+  <div class="ai-chat-footer">
+    <span class="ai-model-badge">Claude Haiku</span>
+    <span>内容仅供参考，不构成投资建议</span>
+  </div>
+</div>
+
+<script src="/js/ai-chat.js"></script>
+</body>
+</html>

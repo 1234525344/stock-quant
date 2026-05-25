@@ -1,0 +1,17 @@
+{
+  "maxTotalPosition": 0.8,
+  "maxSinglePosition": 0.2,
+  "maxIndustryExposure": 0.35,
+  "maxMarketExposure": 1,
+  "maxDailyLoss": 0.05,
+  "maxConsecutiveLossDays": 3,
+  "blacklist": [],
+  "maxNewStockDays": 60,
+  "enableSTFilter": true,
+  "enableSuspensionFilter": true,
+  "enableNewStockFilter": true,
+  "volumeExplosionThreshold": 5,
+  "priceGapThresholdPct": 3,
+  "alertsMaxHistory": 200,
+  "maxPositionsCount": 15
+}

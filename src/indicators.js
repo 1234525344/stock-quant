@@ -157,4 +157,60 @@ function crossSignal(maFast, maSlow) {
   return signals;
 }
 
-module.exports = { SMA, EMA, MACD, RSI, KDJ, BOLL, ATR, WR, OBV, crossSignal };
+// ==================== 增量计算函数 ====================
+// 用于实时引擎: 只计算最新一根K线，大幅降低CPU
+
+function SMA_incremental(prevSMA, prevWindow, newVal, period) {
+  if (!prevWindow || prevWindow.length < period) return null;
+  const sum = prevWindow.reduce((a, b) => a + b, 0) - prevWindow[0] + newVal;
+  return sum / period;
+}
+
+function EMA_incremental(prevEMA, newVal, period) {
+  if (prevEMA == null || isNaN(prevEMA)) return newVal;
+  const k = 2 / (period + 1);
+  return newVal * k + prevEMA * (1 - k);
+}
+
+// IndicatorBuffer — 轻量滑动窗口,避免每次构建数组切片
+class IndicatorBuffer {
+  constructor(maxSize = 60) {
+    this.maxSize = maxSize;
+    this.closes = [];
+    this.highs = [];
+    this.lows = [];
+    this.volumes = [];
+    this.opens = [];
+  }
+
+  size() { return this.closes.length; }
+
+  push(kline) {
+    this.closes.push(kline.close !== undefined ? kline.close : kline.price);
+    this.highs.push(kline.high || this.closes[this.closes.length - 1]);
+    this.lows.push(kline.low || this.closes[this.closes.length - 1]);
+    this.volumes.push(kline.volume || 0);
+    this.opens.push(kline.open || this.closes[this.closes.length - 1]);
+
+    while (this.closes.length > this.maxSize) {
+      this.closes.shift(); this.highs.shift(); this.lows.shift();
+      this.volumes.shift(); this.opens.shift();
+    }
+  }
+
+  warmup(klines) {
+    for (const k of klines) this.push(k);
+  }
+
+  toArrays() {
+    return {
+      closes: [...this.closes],
+      highs: [...this.highs],
+      lows: [...this.lows],
+      volumes: [...this.volumes],
+      opens: [...this.opens],
+    };
+  }
+}
+
+module.exports = { SMA, EMA, MACD, RSI, KDJ, BOLL, ATR, WR, OBV, crossSignal, SMA_incremental, EMA_incremental, IndicatorBuffer };

@@ -17,6 +17,30 @@
     </nav>
   </header>
 
+  <!-- 新手引导 -->
+  <div class="panel" style="margin:16px 20px;max-width:1300px;">
+    <div style="display:flex;align-items:flex-start;gap:10px;">
+      <span style="font-size:24px;">🧪</span>
+      <div>
+        <b style="color:#c8cdf0;">量化工厂是做什么的？</b>
+        <p style="color:#8890b5;font-size:12px;margin:4px 0 0;line-height:1.6;">
+          简单说，这里帮你做三件事：<br>
+          ① <b style="color:#818cf8;">因子分析</b> — 找出哪些特征（比如"最近涨得猛""估值便宜"）最能解释股票的涨跌<br>
+          ② <b style="color:#818cf8;">组合优化</b> — 如果你有多只股票，帮你算出每只该分配多少资金最合理<br>
+          ③ <b style="color:#818cf8;">风险归因</b> — 告诉你一只股票的波动有多少来自大盘，有多少是它自身的原因
+        </p>
+        <button class="btn btn-outline btn-xs quantlab-toggle" style="margin-top:6px;">📖 详细说明</button>
+        <div style="display:none;margin-top:8px;font-size:11px;color:#5f6b8a;line-height:1.7;">
+          <b>因子暴露</b> = 一只股票在某个特征上的"浓度"。比如动量因子暴露高 = 这只股票最近涨势强。<br>
+          <b>Alpha</b> = 扣掉大盘涨跌影响后，这只股票自身的超额收益。正的 = 跑赢大盘，负的 = 跑输大盘。<br>
+          <b>有效前沿</b> = 在所有可能的组合中，性价比（收益/风险比）最高的那些组合连成的曲线。<br>
+          <b>系统性风险</b> = 跟着大盘一起波动的风险（躲不掉）。<b>特质风险</b> = 个股自身的风险（可以通过分散投资降低）。<br>
+          <b>VaR</b> = Value at Risk，在95%的情况下，一天最多亏多少。
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 顶部Alpha条 -->
   <div class="alpha-strip" id="alphaStrip">
     <span class="loading-text">加载因子数据中...</span>
@@ -27,7 +51,7 @@
     <!-- 面板1: 因子看板 -->
     <section class="panel" id="panelFactors">
       <div class="panel-header">
-        <h2>因子暴露热力图</h2>
+        <h2>因子暴露热力图 <span style="font-weight:400;font-size:11px;color:#5f6b8a;" title="颜色越红=该因子超配越明显，越绿=低配越明显。红色因子是近期驱动上涨的主力特征">ⓘ 怎么看？</span></h2>
         <div class="panel-tabs">
           <button class="ptab active" data-view="heatmap">热力图</button>
           <button class="ptab" data-view="bar">Alpha排序</button>
@@ -49,12 +73,12 @@
         <div class="opt-controls">
           <input type="text" id="portCodes" placeholder="股票代码(逗号分隔)" value="600519,000858,300750,601318,000001,002415,600276,601012" style="width:320px;" />
           <select id="optMethod">
-            <option value="maxSharpe">Max Sharpe</option>
-            <option value="riskParity">Risk Parity</option>
-            <option value="minVariance">Min Variance</option>
-            <option value="maxDiversification">Max Diversification</option>
-            <option value="blackLitterman">Black-Litterman</option>
-            <option value="equalWeight">Equal Weight</option>
+            <option value="maxSharpe">最大夏普 (收益风险比最优)</option>
+            <option value="riskParity">风险平价 (每只股票承担同等风险)</option>
+            <option value="minVariance">最小波动 (最稳的组合)</option>
+            <option value="maxDiversification">最大分散 (最分散的组合)</option>
+            <option value="blackLitterman">Black-Litterman (结合个人观点)</option>
+            <option value="equalWeight">等权重 (最简单的平均分配)</option>
           </select>
           <button id="btnOptimize">运行优化</button>
         </div>
@@ -77,27 +101,27 @@
         </div>
       </div>
       <div class="risk-grid">
-        <div class="risk-metric">
+        <div class="risk-metric" title="一年的价格波动幅度，越大=越刺激">
           <span class="rm-label">年化波动率</span>
           <span class="rm-value" id="rVol">-</span>
         </div>
-        <div class="risk-metric">
+        <div class="risk-metric" title="95%概率下，一天最多亏多少">
           <span class="rm-label">VaR 95% (日)</span>
           <span class="rm-value" id="rVaR">-</span>
         </div>
-        <div class="risk-metric">
+        <div class="risk-metric" title="跟大盘波动的同步程度，1=跟大盘一样，>1=比大盘波动更大">
           <span class="rm-label">Beta</span>
           <span class="rm-value" id="rBeta">-</span>
         </div>
-        <div class="risk-metric">
+        <div class="risk-metric" title="风险中有多少来自大盘（躲不掉的系统性风险）">
           <span class="rm-label">系统风险占比</span>
           <span class="rm-value" id="rSys">-</span>
         </div>
-        <div class="risk-metric">
+        <div class="risk-metric" title="个股自身的独立风险（可以通过分散投资降低）">
           <span class="rm-label">特质风险</span>
           <span class="rm-value" id="rSpec">-</span>
         </div>
-        <div class="risk-metric">
+        <div class="risk-metric" title="大盘能解释多少这只股票的波动，越高说明越跟大盘走">
           <span class="rm-label">R²</span>
           <span class="rm-value" id="rR2">-</span>
         </div>
@@ -108,6 +132,52 @@
   </div>
 </div>
 
+<!-- ═══════════════════════ AI Chat ═══════════════════════ -->
+<div class="ai-chat-bubble" id="aiChatBubble" title="AI 智能助手">
+  <span class="ai-bubble-icon">🤖</span>
+</div>
+
+<div class="ai-chat-panel" id="aiChatPanel" style="display:none;">
+  <div class="ai-chat-header">
+    <span>🤖 AI 智能助手</span>
+    <div>
+      <button class="ai-chat-btn" id="btnAISettings" title="设置 API Key">⚙️</button>
+      <button class="ai-chat-btn ai-btn-close" id="btnAIClose">✕</button>
+    </div>
+  </div>
+  <div class="ai-chat-messages" id="aiChatMessages">
+    <div class="ai-chat-empty" id="aiChatWelcome">
+      <div class="ai-chat-welcome">👋 你好！我是 AI 智能助手</div>
+      <div class="ai-chat-hints">
+        <p>试试问我：</p>
+        <button class="ai-hint-btn" data-hint="帮我分析一下这只股票的走势">📊 分析股票走势</button>
+        <button class="ai-hint-btn" data-hint="MACD金叉和死叉是什么意思？">📖 解释技术指标</button>
+        <button class="ai-hint-btn" data-hint="现在市场整体情况怎么样？">📈 今日市场解读</button>
+        <button class="ai-hint-btn" data-hint="怎么使用回测功能来判断策略好坏？">❓ 平台使用帮助</button>
+      </div>
+    </div>
+  </div>
+  <div class="ai-chat-input-row">
+    <textarea id="aiChatInput" placeholder="输入你的问题..." rows="1"></textarea>
+    <button class="ai-send-btn" id="aiChatSend">➤</button>
+  </div>
+  <div class="ai-chat-footer">
+    <span class="ai-model-badge">Claude Haiku</span>
+    <span>内容仅供参考，不构成投资建议</span>
+  </div>
+</div>
+
+<script src="/js/ai-chat.js"></script>
 <script src="/js/quantlab.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.quantlab-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const content = btn.nextElementSibling;
+      if (content) content.style.display = content.style.display === 'none' ? 'block' : 'none';
+    });
+  });
+});
+</script>
 </body>
 </html>

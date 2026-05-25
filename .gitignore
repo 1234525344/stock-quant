@@ -4,3 +4,23 @@ dist-electron/
 *.log
 .DS_Store
 Thumbs.db
+
+# Temp & generated
+.clip-temp.txt
+.browser-auth/
+coverage/
+data/
+logs/
+*.png
+*.jpg
+
+# Personal / business content
+promote-content.txt
+闲鱼*.md
+闲鱼*.txt
+audit_output.txt
+
+# Shopee temp
+shopee-search-result.png
+shopee-vn-status.png
+menglar-login.png

@@ -177,7 +177,7 @@ function backtest(klines, strategyInput, initialCapital = 100000) {
       const comm = proceeds * COMMISSION_SELL;
       totalCommission += comm;
       const rawPnl = proceeds - position * entryPrice;
-      const pnl = rawPnl - comm - (position * entryPrice * COMMISSION_BUY);
+      const pnl = rawPnl - comm;
       const pnlPct = +((pnl / (position * entryPrice)) * 100).toFixed(2);
       capital += proceeds - comm;
       trades.push({

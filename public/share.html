@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="量化交易平台内容分享中心，一键生成公众号、雪球、知乎量化分析文章，免费A股量化工具。">
+<meta property="og:title" content="量化交易平台 — 免费A股量化分析工具">
+<meta property="og:url" content="https://stockquant.serveousercontent.com/share">
+<meta name="robots" content="index, follow">
+<title>内容分享中心 — 量化交易平台 | 公众号/雪球/知乎素材生成</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+.share-card { background: rgba(255,255,255,.03); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.06); border-radius: 18px; padding: 28px; margin-bottom: 16px; }
+.share-card h3 { color: #e0e4f0; margin-bottom: 8px; }
+.share-card p { color: #8890b5; font-size: 13px; margin-bottom: 14px; line-height: 1.6; }
+.platform-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 12px; }
+.platform-btn { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-radius: 12px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); color: #c8cdf0; font-size: 14px; cursor: pointer; text-decoration: none; transition: .2s; }
+.platform-btn:hover { border-color: rgba(99,102,241,.3); background: rgba(99,102,241,.06); }
+.platform-btn .pf-icon { font-size: 24px; }
+.copy-area { background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.06); border-radius: 12px; padding: 16px; font-size: 12px; color: #8890b5; line-height: 1.8; max-height: 400px; overflow-y: auto; white-space: pre-wrap; font-family: inherit; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="header">
+    <a href="/" class="logo">量化交易平台</a>
+    <nav>
+      <a href="/" class="nav-btn">← 主平台</a>
+      <a href="/vip" class="nav-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;">VIP</a>
+    </nav>
+  </header>
+
+  <section style="padding:20px;max-width:800px;margin:0 auto;">
+    <h1 style="color:#e0e4f0;margin-bottom:8px;">📤 内容分享中心</h1>
+    <p style="color:#8890b5;font-size:13px;margin-bottom:4px;">一键生成适合不同平台发布的量化分析内容，复制即发，让更多人看到你的专业分析</p>
+    <p style="color:#5f6b8a;font-size:11px;margin-bottom:24px;">💡 简单说：系统帮你写好文章，你只需复制粘贴到公众号/雪球/知乎就能发布</p>
+
+    <!-- 分享本站 -->
+    <div class="share-card" style="border-color:rgba(99,102,241,.3);background:rgba(99,102,241,.03);">
+      <h3>🔗 分享本站给朋友</h3>
+      <p>扫描下方二维码即可打开量化平台，欢迎转发到微信群/朋友圈</p>
+      <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
+        <div style="text-align:center;flex-shrink:0;">
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://stockquant.serveousercontent.com&bgcolor=1a1d2e&color=c8cdf0" alt="网站二维码" style="width:180px;height:180px;border-radius:12px;border:2px solid rgba(99,102,241,.2);" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22180%22 height=%22180%22><rect fill=%22%231a1d2e%22 width=%22180%22 height=%22180%22 rx=%2212%22/><text fill=%22%238890b5%22 font-size=%2212%22 x=%2225%22 y=%2295%22>QR加载失败</text></svg>'">
+          <div style="font-size:11px;color:#5f6b8a;margin-top:6px;">扫码即开</div>
+        </div>
+        <div style="flex:1;min-width:200px;">
+          <div style="color:#c8cdf0;font-size:14px;font-weight:600;margin-bottom:8px;">📋 微信转发文案（复制粘贴）：</div>
+          <div class="copy-area" style="margin-top:0;font-size:13px;line-height:2;">发现一个免费的量化分析工具，可以看A股K线、策略回测、资金流向、AI自动进化策略，数据来源新浪/东方财富。不用下载，直接打开就能用：
+https://stockquant.serveousercontent.com</div>
+          <button class="btn btn-primary btn-sm" id="btnCopyShare" style="margin-top:8px;">📋 复制转发文案</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 公众号文章 -->
+    <div class="share-card">
+      <h3>📰 公众号文章素材</h3>
+      <p>每天自动生成一篇量化分析文章，排版精美，一键复制到公众号发布。</p>
+      <div style="display:flex;gap:12px">
+        <button class="btn btn-primary btn-sm" id="btnLoadArticle">🔄 生成今日文章</button>
+        <a href="/article" class="btn btn-outline btn-sm" target="_blank">📄 在新窗口打开</a>
+      </div>
+      <div id="articlePreview" class="copy-area" style="display:none;margin-top:12px;"></div>
+    </div>
+
+    <!-- 雪球 -->
+    <div class="share-card">
+      <h3>❄️ 雪球发帖模板</h3>
+      <p>精简版量化速报，适合雪球/东方财富股吧快速发帖。</p>
+      <button class="btn btn-primary btn-sm" id="btnLoadShort">🔄 生成雪球帖子</button>
+      <div id="xueqiuPreview" class="copy-area" style="display:none;margin-top:12px;"></div>
+    </div>
+
+    <!-- 知乎 -->
+    <div class="share-card">
+      <h3>💡 知乎回答模板</h3>
+      <p>针对"如何做量化分析"类问题的标准回答，附带工具引流链接。</p>
+      <button class="btn btn-outline btn-sm" id="btnZhihu">📋 复制模板</button>
+      <div id="zhihuPreview" class="copy-area" style="display:none;margin-top:12px;"></div>
+    </div>
+
+    <!-- 各平台链接 -->
+    <div class="share-card">
+      <h3>🔗 快速发布入口</h3>
+      <div class="platform-grid">
+        <a href="https://xueqiu.com" target="_blank" class="platform-btn"><span class="pf-icon">❄️</span> 雪球</a>
+        <a href="https://zhihu.com" target="_blank" class="platform-btn"><span class="pf-icon">💡</span> 知乎</a>
+        <a href="https://guba.eastmoney.com" target="_blank" class="platform-btn"><span class="pf-icon">📊</span> 东方财富股吧</a>
+        <a href="https://www.xiaohongshu.com" target="_blank" class="platform-btn"><span class="pf-icon">📕</span> 小红书</a>
+        <a href="https://mp.weixin.qq.com" target="_blank" class="platform-btn"><span class="pf-icon">📰</span> 公众号后台</a>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+async function loadArticle() {
+  const preview = document.getElementById('articlePreview');
+  preview.style.display = 'block';
+  preview.textContent = '生成中...';
+  try {
+    const resp = await fetch('/api/article/daily');
+    const data = await resp.json();
+    preview.textContent = data.full;
+  } catch (e) {
+    preview.textContent = '内容加载失败，请确认服务器正在运行后刷新重试\n\n💡 提示：每日文章需要量化引擎运行中才能自动生成';
+  }
+}
+
+async function loadShortPost() {
+  const preview = document.getElementById('xueqiuPreview');
+  preview.style.display = 'block';
+  preview.textContent = '生成中...';
+  try {
+    const resp = await fetch('/api/article/daily');
+    const data = await resp.json();
+    preview.textContent = data.short;
+  } catch (e) {
+    preview.textContent = '内容加载失败，请确认服务器正在运行后刷新重试';
+  }
+}
+
+function showZhihuTemplate() {
+  const preview = document.getElementById('zhihuPreview');
+  preview.style.display = 'block';
+  preview.textContent = `【如何用技术指标辅助A股交易？】
+
+我搭建了一个免费的量化分析工具，分享一些实用经验：
+
+1. 不要迷信单一指标。我同时看MA均线排列+MACD金叉死叉+RSI超买超卖，三个指标都指向同一方向时信号更可靠。
+
+2. 资金流向很重要。主力资金持续流入的板块往往有持续性，散户追涨的板块反而容易接盘。工具里有板块资金流向热力图，一目了然。
+
+3. 策略要回测。我用遗传算法优化参数，发现默认参数（比如RSI 30/70）不一定最优。针对白酒板块，优化后RSI参数变成25/75效果更好。
+
+4. 信号一致性要追踪。策略发出的买卖信号是否正确，5天后回头看，准确率低于50%就要调整。
+
+工具是我自己搭的，免费使用（部分高级功能收费），数据来源新浪/腾讯/东方财富。感兴趣的可以试试。
+
+#量化交易 #A股 #技术分析`;
+}
+
+// 绑定事件（替代内联onclick，CSP兼容）
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('btnCopyShare')?.addEventListener('click', function() {
+    const btn = this;
+    const orig = btn.textContent;
+    const text = '发现一个免费的量化分析工具，可以看A股K线、策略回测、资金流向、AI自动进化策略，数据来源新浪/东方财富。不用下载，直接打开就能用：\nhttps://stockquant.serveousercontent.com';
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = '✅ 已复制！去微信粘贴';
+      btn.style.background = 'linear-gradient(135deg,#4ade80,#22c55e)';
+      setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
+    }).catch(() => alert('复制失败，请手动选择文字后 Ctrl+C'));
+  });
+  document.getElementById('btnLoadArticle')?.addEventListener('click', loadArticle);
+  document.getElementById('btnLoadShort')?.addEventListener('click', loadShortPost);
+  document.getElementById('btnZhihu')?.addEventListener('click', showZhihuTemplate);
+});
+
+// 加载页面时自动生成
+loadArticle();
+</script>
+
+<!-- ═══════════════════════ AI Chat ═══════════════════════ -->
+<div class="ai-chat-bubble" id="aiChatBubble" title="AI 智能助手">
+  <span class="ai-bubble-icon">🤖</span>
+</div>
+
+<div class="ai-chat-panel" id="aiChatPanel" style="display:none;">
+  <div class="ai-chat-header">
+    <span>🤖 AI 智能助手</span>
+    <div>
+      <button class="ai-chat-btn" id="btnAISettings" title="设置 API Key">⚙️</button>
+      <button class="ai-chat-btn ai-btn-close" id="btnAIClose">✕</button>
+    </div>
+  </div>
+  <div class="ai-chat-messages" id="aiChatMessages">
+    <div class="ai-chat-empty" id="aiChatWelcome">
+      <div class="ai-chat-welcome">👋 你好！我是 AI 智能助手</div>
+      <div class="ai-chat-hints">
+        <p>试试问我：</p>
+        <button class="ai-hint-btn" data-hint="帮我分析一下这只股票的走势">📊 分析股票走势</button>
+        <button class="ai-hint-btn" data-hint="MACD金叉和死叉是什么意思？">📖 解释技术指标</button>
+        <button class="ai-hint-btn" data-hint="现在市场整体情况怎么样？">📈 今日市场解读</button>
+        <button class="ai-hint-btn" data-hint="怎么使用回测功能来判断策略好坏？">❓ 平台使用帮助</button>
+      </div>
+    </div>
+  </div>
+  <div class="ai-chat-input-row">
+    <textarea id="aiChatInput" placeholder="输入你的问题..." rows="1"></textarea>
+    <button class="ai-send-btn" id="aiChatSend">➤</button>
+  </div>
+  <div class="ai-chat-footer">
+    <span class="ai-model-badge">Claude Haiku</span>
+    <span>内容仅供参考，不构成投资建议</span>
+  </div>
+</div>
+
+<script src="/js/ai-chat.js"></script>
+</body>
+</html>
