@@ -4,7 +4,7 @@ const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
-const SITE_URL = "https://percentage-insight-satellite-reads.trycloudflare.com";
+const SITE_URL = "https://knights-keen-busy-policies.trycloudflare.com";
 const IMG_DIR = "D:/作业/listing-images";
 const TMP = path.join(__dirname, ".clip-temp.txt");
 
