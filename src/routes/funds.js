@@ -65,7 +65,7 @@ router.get("/api/market/fund-sectors", asyncHandler(async (req, res) => {
     }
 
     const result = Object.values(sectorMap)
-      .map(s => ({ ...s, avgChangePct: +(s.changePctSum / s.count).toFixed(1) }))
+      .map(s => ({ ...s, avgChangePct: s.count > 0 ? +(s.changePctSum / s.count).toFixed(1) : 0 }))
       .sort((a, b) => b.totalMainNet - a.totalMainNet);
 
     res.json(result);
@@ -267,29 +267,29 @@ router.get("/api/fund/nav/:code", asyncHandler(async (req, res) => {
       if (last(dif) > last(dea) && prev(dif) <= prev(dea)) signals.macd = "buy";
       else if (last(dif) < last(dea) && prev(dif) >= prev(dea)) signals.macd = "sell";
       else signals.macd = last(dif) > last(dea) ? "buy" : "sell";
-      signals.macdDetail = `DIF(${last(dif).toFixed(4)}) ${last(dif) > last(dea) ? ">" : "<"} DEA`;
+      signals.macdDetail = `DIF(${last(dif)?.toFixed(4)}) ${last(dif) > last(dea) ? ">" : "<"} DEA`;
     }
 
     if (last(rsi14) != null) {
       signals.rsi = last(rsi14) < 30 ? "buy" : last(rsi14) > 70 ? "sell" : "neutral";
-      signals.rsiDetail = `RSI=${last(rsi14).toFixed(1)}`;
+      signals.rsiDetail = `RSI=${last(rsi14)?.toFixed(1)}`;
     }
 
     if (last(upper) && last(lower) && last(closes)) {
       signals.boll = last(closes) <= last(lower) * 1.02 ? "buy" : last(closes) >= last(upper) * 0.98 ? "sell" : "neutral";
-      signals.bollDetail = `收盘vs上${last(upper).toFixed(4)}/下${last(lower).toFixed(4)}`;
+      signals.bollDetail = `收盘vs上${last(upper)?.toFixed(4)}/下${last(lower)?.toFixed(4)}`;
     }
 
     if (last(k) != null && last(d) != null) {
       if (last(k) > last(d) && prev(k) <= prev(d)) signals.kdj = "buy";
       else if (last(k) < last(d) && prev(k) >= prev(d)) signals.kdj = "sell";
       else signals.kdj = last(k) > last(d) ? "buy" : "sell";
-      signals.kdjDetail = `K${last(k).toFixed(1)} D${last(d).toFixed(1)} J${last(j).toFixed(1)}`;
+      signals.kdjDetail = `K${last(k)?.toFixed(1)} D${last(d)?.toFixed(1)} J${last(j)?.toFixed(1)}`;
     }
 
     if (last(ma60)) {
       signals.trend = last(closes) > last(ma60) ? "buy" : "sell";
-      signals.trendDetail = `收盘${last(closes).toFixed(4)} ${last(closes) > last(ma60) ? ">" : "<"} MA60`;
+      signals.trendDetail = `收盘${last(closes)?.toFixed(4)} ${last(closes) > last(ma60) ? ">" : "<"} MA60`;
     }
 
     // Vote consensus
@@ -313,13 +313,13 @@ router.get("/api/fund/nav/:code", asyncHandler(async (req, res) => {
     const recent20Low = Math.min(...lows.slice(-20));
     signals.levels = {
       resistance: [
-        { level: +last(ma20).toFixed(4), label: "MA20" },
+        { level: +(last(ma20) || 0).toFixed(4), label: "MA20" },
         { level: +recent20High.toFixed(4), label: "20日高点" },
       ].filter(l => l.level > last(closes)).sort((a, b) => a.level - b.level).slice(0, 2),
       support: [
         { level: +recent20Low.toFixed(4), label: "20日低点" },
-        { level: +last(ma20).toFixed(4), label: "MA20" },
-        { level: +last(ma60).toFixed(4), label: "MA60" },
+        { level: +(last(ma20) || 0).toFixed(4), label: "MA20" },
+        { level: +(last(ma60) || 0).toFixed(4), label: "MA60" },
       ].filter(l => l.level < last(closes)).sort((a, b) => b.level - a.level).slice(0, 3),
     };
 
@@ -332,9 +332,9 @@ router.get("/api/fund/nav/:code", asyncHandler(async (req, res) => {
       navDate: last(dates),
       returns: {
         daily: last(dailyReturns),
-        week: navs.length >= 5 ? +((last(closes) / navs[navs.length - 6] - 1) * 100).toFixed(2) : null,
-        month: navs.length >= 22 ? +((last(closes) / navs[navs.length - 23] - 1) * 100).toFixed(2) : null,
-        year: navs.length >= 250 ? +((last(closes) / navs[navs.length - 251] - 1) * 100).toFixed(2) : null,
+        week: navs.length >= 5 && last(closes) && navs[navs.length - 6] ? +((last(closes) / navs[navs.length - 6] - 1) * 100).toFixed(2) : null,
+        month: navs.length >= 22 && last(closes) && navs[navs.length - 23] ? +((last(closes) / navs[navs.length - 23] - 1) * 100).toFixed(2) : null,
+        year: navs.length >= 250 && last(closes) && navs[navs.length - 251] ? +((last(closes) / navs[navs.length - 251] - 1) * 100).toFixed(2) : null,
       },
       indicators: {
         dates: dates.slice(sliceStart),

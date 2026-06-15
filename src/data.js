@@ -1,9 +1,10 @@
 // 股票数据获取 — 新浪财经 + 腾讯接口 + 东方财富
-// v5: HTTP连接池, keepAlive, 实时引擎集成, 请求去重
+// v6: HTTP连接池, keepAlive, 请求去重, 指数退避重试
 const axios = require("axios");
 const iconv = require("iconv-lite");
 const http = require("http");
 const https = require("https");
+const { RequestQueue, fetchWithRetry, batchWithRetry } = require("./request-queue");
 
 // ============ HTTP连接池 (复用TCP连接, 降低延迟) ============
 const httpAgent = new http.Agent({
@@ -26,20 +27,30 @@ const apiClient = axios.create({
   httpAgent,
   httpsAgent,
   timeout: 8000,
+  decompress: true,
   headers: {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Accept-Encoding": "gzip, deflate",
   },
 });
 
-// 请求去重: 相同URL的并发请求复用同一个Promise
+// 请求去重 + 退避重试: 相同URL的并发请求复用同一个Promise
 const inflightRequests = new Map();
+/**
+ * HTTP GET 请求去重 — 相同 URL 的并发请求复用同一个 Promise
+ * @param {string} url
+ * @param {object} opts — axios 配置项
+ * @returns {Promise<object>} 响应 data
+ */
 function dedupedGet(url, opts = {}) {
   const key = url;
   if (inflightRequests.has(key)) {
     return inflightRequests.get(key);
   }
-  const promise = apiClient.get(url, opts).finally(() => {
+  const promise = fetchWithRetry(
+    () => apiClient.get(url, opts),
+    { maxRetries: 2, baseDelay: 1500, label: url.slice(0, 80) }
+  ).finally(() => {
     inflightRequests.delete(key);
   });
   inflightRequests.set(key, promise);
@@ -47,7 +58,7 @@ function dedupedGet(url, opts = {}) {
 }
 
 function toSymbol(code) {
-  if (code.startsWith("6")) return `sh${code}`;
+  if (code.startsWith("5") || code.startsWith("6")) return `sh${code}`;
   return `sz${code}`;
 }
 
@@ -74,6 +85,11 @@ function _getEngine() {
   return _engine;
 }
 
+/**
+ * 获取实时行情 — 优先引擎缓存 → 本地 TDX → HTTP
+ * @param {string[]} codes — 6 位股票代码数组
+ * @returns {Promise<Array<{code:string, name:string, price:number, change:number, changePercent:number, preClose:number, open:number, high:number, low:number, volume:number, amount:number}>>}
+ */
 async function getRealtimeQuotes(codes) {
   // 1. 优先从实时引擎缓存获取
   const engine = _getEngine();
@@ -133,6 +149,12 @@ async function getRealtimeQuotes(codes) {
 
 // ============ K线数据 ============
 
+/**
+ * 获取日K线数据 — 多级降级: TDX 本地 → 腾讯 → 东方财富
+ * @param {string} code — 6 位股票代码
+ * @param {number} days — 获取天数
+ * @returns {Promise<Array<{date:string, open:number, close:number, high:number, low:number, volume:number}>>}
+ */
 async function getKlineData(code, days = 365) {
   const sym = toSymbol(code);
   const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${sym},day,,,${days},qfq`;
@@ -182,21 +204,10 @@ async function searchStock(keyword) {
   } catch (e) { return []; }
 }
 
-// ============ 并发控制 ============
+// ============ 并发控制 (带退避重试) ============
 
 async function batchWithLimit(items, fn, limit = 10) {
-  const results = new Array(items.length);
-  let idx = 0;
-
-  async function worker() {
-    while (idx < items.length) {
-      const i = idx++;
-      try { results[i] = await fn(items[i]); } catch (e) { results[i] = null; }
-    }
-  }
-
-  const workers = Array(Math.min(limit, items.length)).fill(0).map(() => worker());
-  await Promise.all(workers);
+  const results = await batchWithRetry(items, fn, { concurrency: limit, label: "batchWithLimit" });
   return results.filter(Boolean);
 }
 
@@ -214,28 +225,54 @@ async function getStockName(code) {
 
   try {
     const quotes = await getRealtimeQuotes([code]);
-    if (quotes[0]) return quotes[0].name;
+    if (quotes[0]?.name) { cacheName(code, quotes[0].name); return quotes[0].name; }
   } catch (e) {}
+
+  // 盘后回退: 腾讯搜索API (全天可用)
+  try {
+    const results = await searchStock(code);
+    const match = results.find(r => r.code === code);
+    if (match?.name) { cacheName(code, match.name); return match.name; }
+  } catch (e) {}
+
   return "";
 }
 
 // ============ 资金流向 ============
 
-// 原生HTTP请求 (东方财富push2 API用HTTP无需TLS, 且HTTPS在某些网络下会hang)
+// HTTPS优先请求 (东方财富push2 API, 失败时降级HTTP)
 function nativeHttpsGet(url, timeoutMs = 6000) {
-  // 将https://替换为http://以兼容东方财富API
-  const httpUrl = url.replace(/^https:\/\//, "http://");
+  // 优先尝试HTTPS，利用已配置的keepAlive连接池
   return new Promise((resolve, reject) => {
-    const req = http.get(httpUrl, { timeout: timeoutMs, headers: { "User-Agent": "Mozilla/5.0" } }, (res) => {
-      let body = "";
-      res.on("data", (chunk) => { body += chunk; });
-      res.on("end", () => {
-        try { resolve(JSON.parse(body)); }
-        catch (e) { reject(new Error("JSON parse failed")); }
+    const doRequest = (targetUrl) => {
+      const isHttps = targetUrl.startsWith("https://");
+      const lib = isHttps ? https : http;
+      const opts = {
+        timeout: timeoutMs,
+        headers: { "User-Agent": "Mozilla/5.0" },
+      };
+      if (isHttps) opts.agent = httpsAgent;
+
+      const req = lib.get(targetUrl, opts, (res) => {
+        let body = "";
+        res.on("data", (chunk) => { body += chunk; });
+        res.on("end", () => {
+          try { resolve(JSON.parse(body)); }
+          catch (e) { reject(new Error("JSON parse failed")); }
+        });
       });
-    });
-    req.on("error", reject);
-    req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
+      req.on("error", (err) => {
+        // HTTPS失败时降级HTTP重试
+        if (isHttps && err.code !== "ERR_INVALID_PROTOCOL") {
+          const httpUrl = targetUrl.replace(/^https:\/\//, "http://");
+          doRequest(httpUrl);
+        } else {
+          reject(err);
+        }
+      });
+      req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
+    };
+    doRequest(url);
   });
 }
 
@@ -244,6 +281,12 @@ function toSecid(code) {
   return /^[023]/.test(code) ? `0.${code}` : `1.${code}`;
 }
 
+/**
+ * 获取个股资金流向 (日级别) — 东方财富 push2 API
+ * @param {string} code — 6 位股票代码
+ * @param {number} days — 天数
+ * @returns {Promise<Array<{date:string, mainNet:number, mainPct:number, hugeNet:number, largeNet:number, midNet:number, smallNet:number}>>}
+ */
 async function getFundFlow(code, days = 30) {
   const secid = toSecid(code);
   const url = `https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?secid=${secid}&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&lmt=${days}`;
@@ -373,7 +416,45 @@ async function getKlineDataEnhanced(code, days = 365) {
 
 async function getLimitUpDown(date) {
   try {
-    const url = `https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3b4bca0f43c9a2c3d7e7a6e70cf7&date=${date || ""}&pageSize=200`;
+    // 如果没传日期，自动取上一个交易日
+    let tradeDate = date;
+    if (!tradeDate) {
+      const now = new Date();
+      // 往前找最多7天
+      for (let i = 1; i <= 7; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        // 跳过周末
+        if (d.getDay() === 0 || d.getDay() === 6) continue;
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        tradeDate = `${y}${m}${dd}`;
+        break;
+      }
+    }
+    const formattedDate = tradeDate ? `${tradeDate.slice(0,4)}-${tradeDate.slice(4,6)}-${tradeDate.slice(6,8)}` : "";
+
+    // 优先使用选股宝API（更稳定）
+    if (formattedDate) {
+      const url = `https://data.eastmoney.com/dataapi/xuangu/list?st=CHANGE_RATE&sr=-1&ps=50&p=1&sty=SECUCODE,SECURITY_CODE,SECURITY_NAME_ABBR,CHANGE_RATE,CLOSE_PRICE,HIGH_PRICE&filter=(TRADE_DATE='${formattedDate}')(CHANGE_RATE>=9.8)`;
+      const { data } = await dedupedGet(url, {
+        timeout: 8000,
+        headers: { Referer: "https://data.eastmoney.com" },
+      });
+      if (data?.result?.data?.length) {
+        const pool = data.result.data;
+        return {
+          up: pool.map(s => ({
+            code: s.SECURITY_CODE, name: s.SECURITY_NAME_ABBR,
+            price: s.CLOSE_PRICE || s.HIGH_PRICE, changePct: +s.CHANGE_RATE, limitUp: true,
+          })).slice(0, 30),
+          down: [],
+        };
+      }
+    }
+    // 回退到原API
+    const url = `https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3b4bca0f43c9a2c3d7e7a6e70cf7&date=${tradeDate || ""}&pageSize=200`;
     const { data } = await dedupedGet(url, {
       timeout: 6000,
       headers: { Referer: "https://data.eastmoney.com" },
@@ -411,19 +492,49 @@ async function getMarginTrade(code) {
 }
 
 async function getMarketBreadth() {
+  // 优先尝试东方财富push2
   try {
     const url = "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5000&np=1&fid=f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23&fields=f2,f3,f12,f14";
     const resp = await dedupedGet(url, {
-      timeout: 8000,
+      timeout: 5000,
       headers: { Referer: "https://quote.eastmoney.com" },
     });
     const d = resp.data;
     const stocks = d?.data?.diff || d?.Data?.Diff || [];
-    const total = stocks.length;
+    if (stocks.length > 100) {
+      const total = stocks.length;
+      let up = 0, down = 0, flat = 0, limitUp = 0, limitDown = 0;
+      let totalChg = 0;
+      stocks.forEach(s => {
+        const chg = +s.f3 || 0;
+        totalChg += chg;
+        if (chg > 9.5) limitUp++;
+        else if (chg < -9.5) limitDown++;
+        else if (chg > 0) up++;
+        else if (chg < 0) down++;
+        else flat++;
+      });
+      return {
+        total, up, down, flat, limitUp, limitDown,
+        avgChg: +(totalChg / total).toFixed(2),
+        upRatio: +(up / total * 100).toFixed(1),
+        breadth: +((up - down) / total * 100).toFixed(1),
+        source: "push2",
+        timestamp: new Date().toISOString(),
+      };
+    }
+  } catch (e) { /* fallback below */ }
+
+  // Sina采样降级: 用150+代表性股票估算市场宽度
+  try {
+    const { BREADTH_SAMPLE } = require("./state");
+    const quotes = await getRealtimeQuotes(BREADTH_SAMPLE.slice(0, 160));
+    if (!quotes.length) return null;
+    const total = quotes.length;
     let up = 0, down = 0, flat = 0, limitUp = 0, limitDown = 0;
     let totalChg = 0;
-    stocks.forEach(s => {
-      const chg = +s.f3 || 0;
+    quotes.forEach(q => {
+      const chg = q.change || 0;
       totalChg += chg;
       if (chg > 9.5) limitUp++;
       else if (chg < -9.5) limitDown++;
@@ -436,6 +547,7 @@ async function getMarketBreadth() {
       avgChg: +(totalChg / total).toFixed(2),
       upRatio: +(up / total * 100).toFixed(1),
       breadth: +((up - down) / total * 100).toFixed(1),
+      source: "sina_sample",
       timestamp: new Date().toISOString(),
     };
   } catch (e) { return null; }
@@ -443,10 +555,13 @@ async function getMarketBreadth() {
 
 // ============ 导出 ============
 module.exports = {
+  apiClient,
+  nativeHttpsGet,
   getRealtimeQuotes, getKlineData, getKlineDataEnhanced,
   getIntradayTrend,
   searchStock, batchWithLimit, getStockName,
   getFundFlow, getFundFlowMinute,
   getMarginTrade, getMarketBreadth,
+  getLimitUpDown,
   dedupedGet,
 };

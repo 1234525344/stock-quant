@@ -1,0 +1,88 @@
+/*
+ *  Copyright (c) 2025 hikyuu.org
+ *
+ *  Created on: 2025-08-28
+ *      Author: fasiondog
+ */
+
+#pragma once
+
+#include "Stock.h"
+
+namespace hku {
+
+class HKU_API KDataImp : public enable_shared_from_this<KDataImp> {
+public:
+    KDataImp() = default;
+    KDataImp(const Stock& stock, const KQuery& query);
+    virtual ~KDataImp();
+
+    const KQuery& getQuery() const {
+        return m_query;
+    }
+
+    const Stock& getStock() const {
+        return m_stock;
+    }
+
+    virtual bool empty() const noexcept {
+        return true;
+    }
+
+    virtual size_t size() const noexcept {
+        return 0;
+    }
+
+    virtual size_t startPos() const {
+        return 0;
+    }
+
+    virtual size_t endPos() const {
+        return 0;
+    }
+
+    virtual size_t lastPos() const {
+        return 0;
+    }
+
+    virtual size_t getPos(const Datetime& datetime) const noexcept {
+        return Null<size_t>();
+    }
+
+    virtual const KRecord& getKRecord(size_t pos) const noexcept {
+        return KRecord::NullKRecord;
+    }
+
+    virtual const KRecord& front() const {
+        return KRecord::NullKRecord;
+    }
+
+    virtual const KRecord& back() const {
+        return KRecord::NullKRecord;
+    }
+
+    virtual const KRecord* data() const noexcept {
+        return nullptr;
+    }
+
+    virtual KRecord* data() noexcept {
+        return nullptr;
+    }
+
+    virtual DatetimeList getDatetimeList() const {
+        return DatetimeList();
+    }
+
+    typedef shared_ptr<KDataImp> KDataImpPtr;
+    virtual KDataImpPtr getOtherFromSelf(const KQuery& query) const {
+        return std::make_shared<KDataImp>(m_stock, query);
+    }
+
+protected:
+    KQuery m_query;
+    Stock m_stock;
+};
+
+typedef shared_ptr<KDataImp> KDataImpPtr;
+
+} /* namespace hku */

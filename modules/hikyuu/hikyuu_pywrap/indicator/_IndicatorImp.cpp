@@ -1,0 +1,117 @@
+/*
+ * _IndicatorImp.cpp
+ *
+ *  Created on: 2013-2-13
+ *      Author: fasiondog
+ */
+
+#include <hikyuu/indicator/Indicator.h>
+#include "../pybind_utils.h"
+
+namespace py = pybind11;
+using namespace hku;
+
+class PyIndicatorImp : public IndicatorImp {
+    PY_CLONE(PyIndicatorImp, IndicatorImp)
+
+public:
+    PyIndicatorImp() : IndicatorImp() {
+        m_is_python_object = true;
+    }
+
+    PyIndicatorImp(const string& name) : IndicatorImp(name) {
+        m_is_python_object = true;
+    }
+
+    PyIndicatorImp(const string& name, size_t result_num) : IndicatorImp(name, result_num) {
+        m_is_python_object = true;
+    }
+
+    void _calculate(const Indicator& ind) override {
+        PYBIND11_OVERLOAD(void, IndicatorImp, _calculate, ind);
+    }
+
+    void _dyn_run_one_step(const Indicator& ind, size_t curPos, size_t step) override {
+        PYBIND11_OVERLOAD(void, IndicatorImp, _dyn_run_one_step, ind, curPos, step);
+    }
+
+    void _dyn_calculate(const Indicator& ind) override {
+        PYBIND11_OVERLOAD(void, IndicatorImp, _dyn_calculate, ind);
+    }
+
+    bool supportIncrementCalculate() const override {
+        PYBIND11_OVERLOAD_NAME(bool, IndicatorImp, "support_increment_calculate",
+                               supportIncrementCalculate, );
+    }
+
+    size_t min_increment_start() const override {
+        PYBIND11_OVERLOAD_NAME(bool, IndicatorImp, "min_increment_start", min_increment_start);
+    }
+
+    void _increment_calculate(const Indicator& ind, size_t start_pos) override {
+        PYBIND11_OVERLOAD(void, IndicatorImp, _increment_calculate, ind, start_pos);
+    }
+};
+
+const string& (IndicatorImp::*read_name)() const = &IndicatorImp::name;
+void (IndicatorImp::*write_name)(const string&) = &IndicatorImp::name;
+
+void (IndicatorImp::*set_ind_param1)(const string&, const Indicator&) = &IndicatorImp::setIndParam;
+void (IndicatorImp::*set_ind_param2)(const string&, const IndParam&) = &IndicatorImp::setIndParam;
+
+void export_IndicatorImp(py::module& m) {
+    py::class_<IndicatorImp, IndicatorImpPtr, PyIndicatorImp>(
+      m, "IndicatorImp", R"(指标实现类，定义新指标时，应从此类继承
+    
+    子类需实现以下接口：
+
+        - _clone() -> IndicatorImp
+        - _calculate(ind) ：指标计算
+        - isNeedContext(bool) ：是否依赖上下文)")
+      .def(py::init<>())
+
+      .def(py::init<const string&>(), R"(
+    :param str name: 指标名称)")
+
+      .def(py::init<const string&, size_t>(), R"(
+    :param str name: 指标名称
+    :param int result_num: 指标结果集数量)")
+
+      .def("__str__", to_py_str<IndicatorImp>)
+      .def("__repr__", to_py_str<IndicatorImp>)
+
+      .def_property("name", read_name, write_name, py::return_value_policy::copy, "指标名称")
+      .def_property_readonly("discard", &IndicatorImp::discard, "结果中需抛弃的个数")
+
+      .def("get_parameter", &IndicatorImp::getParameter, py::return_value_policy::copy,
+           "获取内部参数类对象")
+
+      .def("have_param", &IndicatorImp::haveParam)
+      .def("get_param", &IndicatorImp::getParam<boost::any>)
+      .def("set_param", static_cast<void (IndicatorImp::*)(const std::string&, const boost::any&)>(
+                          &IndicatorImp::setParam))
+      .def("have_ind_param", &IndicatorImp::haveIndParam)
+      .def("get_ind_param", &IndicatorImp::getIndParam)
+      .def("set_ind_param", set_ind_param1)
+      .def("set_ind_param", set_ind_param2)
+      .def("set_discard", &IndicatorImp::setDiscard)
+      .def("_set", &IndicatorImp::_set, py::arg("val"), py::arg("pos"), py::arg("num") = 0)
+      .def("_ready_buffer", &IndicatorImp::_readyBuffer)
+      .def("get_result_num", &IndicatorImp::getResultNumber)
+      .def("get_result_as_price_list", &IndicatorImp::getResultAsPriceList)
+      .def("calculate", &IndicatorImp::calculate)
+      .def("clone", &IndicatorImp::clone)
+      .def("_calculate", &IndicatorImp::_calculate)
+      .def("_dyn_run_one_step", &IndicatorImp::_dyn_run_one_step)
+      .def("_dyn_calculate", &IndicatorImp::_dyn_calculate)
+      .def("is_need_context", &IndicatorImp::isNeedContext)
+      .def("is_leaf", &IndicatorImp::isLeaf)
+      .def("is_serial", &IndicatorImp::isSerial)
+      .def("contains", &IndicatorImp::contains)
+      .def("print_tree", &IndicatorImp::printTree, py::arg("show_long_name") = false)
+      .def("print_all_sub_trees", &IndicatorImp::printAllSubTrees,
+           py::arg("show_long_name") = false)
+      .def("print_leaves", &IndicatorImp::printLeaves, py::arg("show_long_name") = false)
+
+        DEF_PICKLE(IndicatorImpPtr);
+}

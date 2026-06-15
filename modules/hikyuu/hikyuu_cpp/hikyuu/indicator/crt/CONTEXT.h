@@ -1,0 +1,54 @@
+/*
+ *  Copyright (c) 2024 hikyuu.org
+ *
+ *  Created on: 2024-12-28
+ *      Author: fasiondog
+ */
+
+#pragma once
+
+#include "../Indicator.h"
+
+namespace hku {
+
+/**
+ * 独立上下文指标
+ * @param ind 待包装指标
+ * @param fill_null 是否填充空值，默认为 false
+ * @param use_self_ktype 使用自身独立上下文的K线类型，否则计算时将使用计算上下文中K线类型
+ * @param use_self_recover_type 使用自身独立上下文的复权类型，否则计算时将使用计算上下文中的复权类型
+ * @ingroup Indicator
+ */
+Indicator HKU_API CONTEXT(const Indicator& ind, bool fill_null = false, bool use_self_ktype = false,
+                          bool use_self_recover_type = false);
+Indicator HKU_API CONTEXT(bool fill_null = false, bool use_self_ktype = false,
+                          bool use_self_recover_type = false);
+
+/**
+ * @brief 通过指定股票，设置指标独立上下文指标
+ * @param ind 输入指标公式，如果自身携带上下文，将被忽略
+ * @param stk 指定股票
+ * @param fill_null 是否填充空值，默认为 false
+ * @return Indicator
+ */
+Indicator HKU_API CONTEXT(const Indicator& ind, const Stock& stk, bool fill_null = false);
+
+/**
+ * 获取指标上下文
+ * @note Indicator::getContext()方法获取的是当前的上下文，但对于 CONTEXT
+ * 独立上下文指标无法获取其指定的独立上下文，需用此方法获取。
+ * 该指标一旦作为公式，参与计算，其上下文可能发生变化，但其stock保持不变，仅query范围发生改变
+ * @param ind
+ * @return KData
+ */
+KData HKU_API CONTEXT_K(const Indicator& ind);
+
+/**
+ * @brief 判断指标是否为独立上下文指标
+ * @param ind
+ * @return true
+ * @return false
+ */
+bool HKU_API is_standalone_context(const Indicator& ind);
+
+}  // namespace hku

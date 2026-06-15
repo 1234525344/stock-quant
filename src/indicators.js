@@ -1,11 +1,23 @@
-// 技术指标计算引擎
+/**
+ * 技术指标计算引擎 — SMA/EMA/MACD/RSI/BOLL/KDJ/ATR/OBV
+ */
 
-// SMA — 简单移动平均
+/**
+ * 简单移动平均 — 滑动窗口 O(n)
+ * @param {number[]} data — 价格序列
+ * @param {number} period — 周期
+ * @returns {(number|null)[]} 等长数组，前 period-1 位为 null
+ */
 function SMA(data, period) {
   const result = new Array(data.length).fill(null);
-  for (let i = period - 1; i < data.length; i++) {
-    let sum = 0;
-    for (let j = 0; j < period; j++) sum += data[i - j];
+  if (data.length < period) return result;
+  // 初始化窗口和
+  let sum = 0;
+  for (let i = 0; i < period; i++) sum += data[i];
+  result[period - 1] = sum / period;
+  // 滑动窗口: 加新值, 减旧值
+  for (let i = period; i < data.length; i++) {
+    sum += data[i] - data[i - period];
     result[i] = sum / period;
   }
   return result;
@@ -146,6 +158,29 @@ function OBV(closes, volumes) {
   return result;
 }
 
+// SAR — 抛物转向 (停损点)
+function SAR(highs, lows, afStep = 0.02, afMax = 0.2) {
+  const result = new Array(highs.length).fill(null);
+  let isUp = true;
+  let af = afStep;
+  let ep = highs[0];
+  let sar = lows[0];
+
+  for (let i = 1; i < highs.length; i++) {
+    result[i] = +sar.toFixed(2);
+    if (isUp) {
+      sar += af * (ep - sar);
+      if (lows[i] < sar) { isUp = false; af = afStep; sar = ep; ep = lows[i]; }
+      else { if (highs[i] > ep) { ep = highs[i]; af = Math.min(af + afStep, afMax); } }
+    } else {
+      sar += af * (ep - sar);
+      if (highs[i] > sar) { isUp = true; af = afStep; sar = ep; ep = highs[i]; }
+      else { if (lows[i] < ep) { ep = lows[i]; af = Math.min(af + afStep, afMax); } }
+    }
+  }
+  return result;
+}
+
 // 均线金叉死叉信号
 function crossSignal(maFast, maSlow) {
   const signals = new Array(maFast.length).fill(0);
@@ -213,4 +248,30 @@ class IndicatorBuffer {
   }
 }
 
-module.exports = { SMA, EMA, MACD, RSI, KDJ, BOLL, ATR, WR, OBV, crossSignal, SMA_incremental, EMA_incremental, IndicatorBuffer };
+// calcReturns — 多周期收益率
+function calcReturns(closes) {
+  const rets = {};
+  const i = closes.length - 1;
+  if (i < 20) return rets;
+  const periods = { d5: 5, d10: 10, d20: 20 };
+  for (const [k, n] of Object.entries(periods)) {
+    rets[k] = (i >= n && closes[i - n] > 0)
+      ? +((closes[i] - closes[i - n]) / closes[i - n] * 100).toFixed(2)
+      : 0;
+  }
+  return rets;
+}
+
+// calcVolatility — 20日年化波动率
+function calcVolatility(closes) {
+  const i = closes.length - 1;
+  if (i < 20) return 0;
+  const rets = [];
+  for (let t = i - 19; t <= i; t++) {
+    rets.push(closes[t - 1] > 0 ? (closes[t] - closes[t - 1]) / closes[t - 1] : 0);
+  }
+  const avg = rets.reduce((a, b) => a + b, 0) / rets.length;
+  return +(Math.sqrt(rets.reduce((s, r) => s + (r - avg) ** 2, 0) / rets.length) * 100 * Math.sqrt(252)).toFixed(1);
+}
+
+module.exports = { SMA, EMA, MACD, RSI, KDJ, BOLL, ATR, WR, OBV, SAR, crossSignal, SMA_incremental, EMA_incremental, IndicatorBuffer, calcReturns, calcVolatility };

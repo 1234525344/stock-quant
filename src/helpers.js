@@ -1,7 +1,7 @@
 // 量化交易平台 - 共享辅助函数模块
 // 纯逻辑函数，不依赖 Express req/res，可被多个路由模块复用
 
-const axios = require("axios");
+const { apiClient } = require("./data");
 const { getRealtimeQuotes, getKlineData, getStockName, batchWithLimit } = require("./data");
 const { getIndexKline, getSectorFlow, getConceptFlow, ETF_MAP } = require("./index");
 const { SMA, MACD, RSI, KDJ, BOLL } = require("./indicators");
@@ -225,7 +225,7 @@ async function getEtfFlow() {
   try {
     const ts = Date.now();
     const url = `https://push2.eastmoney.com/api/qt/clist/get?cb=jQuery_${ts}&pn=1&pz=30&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f62&fs=m:90+t:4&fields=f2,f3,f4,f12,f14,f62,f66,f69,f184&_=${ts}`;
-    const resp = await axios.get(url, {
+    const resp = await apiClient.get(url, {
       timeout: 8000,
       headers: { "User-Agent": "Mozilla/5.0", Referer: "https://data.eastmoney.com/bkzj/hy.html" },
     });
@@ -281,7 +281,7 @@ async function getFundRanking(params = {}) {
   try {
     const fs = type === "stock" ? "gp" : type === "bond" ? "zq" : type === "qdii" ? "qdii" : "all";
     const url = `https://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=kf&ft=${fs}&rs=&gs=0&sc=${sort}&st=desc&pi=1&pn=${limit}`;
-    const resp = await axios.get(url, {
+    const resp = await apiClient.get(url, {
       timeout: 8000,
       headers: { "Referer": "https://fund.eastmoney.com/data/fundranking.html" }
     });

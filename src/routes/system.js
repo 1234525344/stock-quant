@@ -11,35 +11,6 @@ router.get("/quantlab", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "..", "public", "quantlab.html"));
 });
 
-// ==================== 策略生成器 & 监控页面 ====================
-
-router.get("/strategy-builder", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "..", "public", "strategy-builder.html"));
-});
-
-router.get("/monitor", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "..", "public", "monitor.html"));
-});
-
-router.get("/paper-trading", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "..", "public", "paper-trading.html"));
-});
-
-// 交易中心统一页面
-router.get("/trade-center", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "..", "public", "trade-center.html"));
-});
-
-// VIP 会员页
-router.get("/vip", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "..", "public", "vip.html"));
-});
-
-// 策略市场
-router.get("/marketplace", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "..", "public", "marketplace.html"));
-});
-
 // 内容分享中心
 router.get("/share", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "..", "public", "share.html"));
@@ -135,22 +106,43 @@ body { max-width: 680px; margin: 0 auto; padding: 20px; font-family: -apple-syst
 </html>`;
 }
 
-// ==================== 前端性能监控 ====================
+// ==================== 股票池 & 策略对比 ====================
 
-router.post("/api/perf", asyncHandler(async (req, res) => {
-  await database.ready;
-  if (req.body && req.body.lcp) {
-    database.insertPerformance(req.body);
-    console.log(`[性能] LCP=${req.body.lcp}ms FID=${req.body.fid || 0}ms CLS=${req.body.cls || 0} TTFB=${req.body.ttfb || 0}ms`);
+const { STOCK_POOL } = require("../state");
+
+router.get("/api/pool", (req, res) => {
+  res.json({ count: STOCK_POOL.length, codes: STOCK_POOL });
+});
+
+router.get("/api/compare", asyncHandler(async (req, res) => {
+  const { code, days } = req.query;
+  if (!code) return res.status(400).json({ error: "code 必填" });
+  const backtest = require("../autotrade/backtest");
+  const { STRATEGY_TYPES } = require("../autotrade/strategy");
+  const endDate = new Date().toISOString().slice(0, 10);
+  const start = new Date();
+  start.setDate(start.getDate() - (parseInt(days) || 365));
+  const startDate = start.toISOString().slice(0, 10);
+
+  const results = {};
+  for (const [key, cfg] of Object.entries(STRATEGY_TYPES)) {
+    try {
+      const result = await backtest.runStrategy(key, code, startDate, endDate);
+      results[key] = {
+        strategy: cfg.name || cfg || key,
+        totalReturn: result.summary?.totalReturn || 0,
+        annualizedReturn: result.summary?.annualizedReturn || 0,
+        sharpe: result.risk?.sharpeRatio ?? 0,
+        maxDrawdown: result.risk?.maxDrawdownPct ?? 0,
+        winRate: result.trades?.winRate ?? 0,
+        totalTrades: result.summary?.totalTrades || 0,
+        grade: result.summary?.grade || "D",
+      };
+    } catch (e) {
+      results[key] = { strategy: cfg.name || cfg || key, error: e.message };
+    }
   }
-  res.status(204).end();
-}));
-
-// 性能统计 API
-router.get("/api/perf/stats", asyncHandler(async (req, res) => {
-  await database.ready;
-  const stats = database.getPerformanceStats();
-  res.json(stats || {});
+  res.json({ code, startDate, endDate, results });
 }));
 
 // ==================== 数据库统计 API ====================
@@ -173,11 +165,19 @@ router.get("/api/health", (req, res) => {
   } catch (_) {
     // server.js not yet fully loaded or circular dependency — degrade gracefully
   }
+
+  // 运行时指标
+  let metricsSummary = {};
+  try {
+    const { metrics } = require("../metrics");
+    metricsSummary = metrics.toJSON();
+  } catch (_) {}
+
   const health = {
     status: "ok",
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
-    version: "1.0.0",
+    version: "2.0.0",
     environment: process.env.NODE_ENV || "development",
     memory: {
       heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + "MB",
@@ -189,6 +189,7 @@ router.get("/api/health", (req, res) => {
       websocket: wssOk ? "ok" : "error",
       realtimeEngine: realtimeOk,
     },
+    metrics: metricsSummary,
   };
   res.json(health);
 });

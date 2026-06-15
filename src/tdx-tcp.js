@@ -6,6 +6,7 @@
 
 const net = require("net");
 const zlib = require("zlib");
+const { logger } = require("./logger");
 
 const TDX_SERVERS = [
   { host: "119.147.212.81", port: 7709 },
@@ -147,7 +148,7 @@ class TDXTCPClient {
 
   _rawSend(data) {
     if (!this.socket || !this.connected) return;
-    try { this.socket.write(data); } catch (e) { console.warn("[TDX] 写入失败:", e.message); }
+    try { this.socket.write(data); } catch (e) { logger.warn("[TDX] 写入失败:", e.message); }
   }
 
   // ====== 消息解析 ======

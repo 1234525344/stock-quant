@@ -1,0 +1,971 @@
+/*
+ * test_Indicator.cpp
+ *
+ *  Created on: 2013-4-11
+ *      Author: fasiondog
+ */
+
+#include "../test_config.h"
+#include <hikyuu/indicator/build_in.h>
+#include <hikyuu/StockManager.h>
+
+/**
+ * @defgroup test_indicator_Indicator test_indicator_Indicator
+ * @ingroup test_hikyuu_indicator_suite
+ * @{
+ */
+
+/** @par 检测点 */
+TEST_CASE("test_indicator_other") {
+    double dx = Null<double>();
+    size_t ix = size_t(dx);
+    // 随机值
+    HKU_INFO("double nan to size_t: {}", ix);
+
+    float fx = Null<float>();
+    ix = size_t(fx);
+    // 随机值
+    HKU_INFO("float nan to size_t: {}", ix);
+}
+
+/** @par 检测点 */
+TEST_CASE("test_indicator_alike") {
+    /** @arg 空 indicator 比较 */
+    CHECK_UNARY(Indicator().alike(Indicator()));
+
+    PriceList d1, d2;
+    for (size_t i = 0; i < 10; ++i) {
+        d1.push_back(i);
+        d2.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+    for (size_t i = 0, len = data1.size(); i < len; i++) {
+        CHECK(data1[i] != data2[i]);
+    }
+
+    CHECK_UNARY(!data1.alike(data2));
+
+    for (size_t i = 0; i < 10; ++i) {
+        d2[i] = i;
+    }
+    data2 = PRICELIST(d2);
+    for (size_t i = 0, len = data1.size(); i < len; i++) {
+        CHECK(data1[i] == data2[i]);
+    }
+    CHECK_UNARY(data1.alike(data2));
+}
+
+/** @par 检测点 */
+TEST_CASE("test_operator_add") {
+    /** @arg 正常相加*/
+    PriceList d1, d2;
+    for (size_t i = 0; i < 10; ++i) {
+        d1.push_back(i);
+        d2.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+    Indicator result = data1 + data2;
+
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], i + i + 1);
+    }
+
+    /** @arg 两个待加的ind的size不同，其中一个为0 */
+    Indicator data3;
+    result = data1 + data3;
+    CHECK_UNARY(result.empty());
+    CHECK_EQ(result.size(), 0);
+
+    /** @arg 两个待加的ind的size不同，其中一个为0 */
+    PriceList d3;
+    for (size_t i = 0; i < 20; ++i) {
+        d3.push_back(i);
+    }
+    data3 = PRICELIST(d3);
+    result = data1 + data3;
+    CHECK_EQ(data1.size(), 10);
+    CHECK_EQ(data3.size(), 20);
+    CHECK_EQ(result.empty(), false);
+    CHECK_EQ(result.size(), 20);
+    CHECK_EQ(result.discard(), 10);
+    for (size_t i = 0; i < result.discard(); ++i) {
+        CHECK_UNARY(std::isnan(result[i]));
+    }
+    for (size_t i = result.discard(); i < 20; ++i) {
+        CHECK_EQ(result[i], i + i - 10);
+    }
+
+    /** @arg 两个待加的ind的size相同，但result_number不同 */
+    StockManager& sm = StockManager::instance();
+    Stock stock = sm.getStock("sh600000");
+    KQuery query(0, 10);
+    KData kdata = stock.getKData(query);
+    Indicator k = KDATA(kdata);
+    CHECK_EQ(k.size(), data1.size());
+    result = k + data1;
+    CHECK_EQ(result.size(), k.size());
+    CHECK_EQ(result.getResultNumber(), 1);
+    for (size_t i = 0; i < result.size(); ++i) {
+        CHECK_EQ(result[i], (k[i] + data1[i]));
+    }
+}
+
+#if ENABLE_BENCHMARK_TEST
+TEST_CASE("test_operator_add_benchmark") {
+    PriceList d1, d2;
+    for (size_t i = 0; i < 10000; ++i) {
+        d1.push_back(i);
+        d2.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+
+    int cycle = 10000;  // 测试循环次数
+
+    {
+        BENCHMARK_TIME_MSG(Indicator_add, cycle, HKU_CSTR(""));
+        SPEND_TIME_CONTROL(false);
+        for (int i = 0; i < cycle; i++) {
+            Indicator result = data1 + data2;
+            DO_NOT_OPTIMIZE(result);
+        }
+    }
+}
+#endif
+
+/** @par 检测点 */
+TEST_CASE("test_operator_sub") {
+    /** @arg 正常相减*/
+    PriceList d1, d2;
+    for (size_t i = 0; i < 10; ++i) {
+        d1.push_back(i);
+        d2.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+    Indicator result = data1 - data2;
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], data1[i] - data2[i]);
+    }
+
+    /** @arg 两个待减的ind的size不同 */
+    Indicator data3;
+    result = data1 - data3;
+    CHECK_UNARY(result.empty());
+    CHECK_EQ(result.size(), 0);
+
+    /** @arg 两个待减的ind的size相同，但result_number不同 */
+    StockManager& sm = StockManager::instance();
+    Stock stock = sm.getStock("sh600000");
+    KQuery query(0, 10);
+    KData kdata = stock.getKData(query);
+    Indicator k = KDATA(kdata);
+    CHECK_EQ(k.size(), data1.size());
+    result = k - data1;
+    CHECK_EQ(result.size(), k.size());
+    for (size_t i = 0; i < result.size(); ++i) {
+        CHECK_EQ(result[i], (k[i] - data1[i]));
+    }
+}
+
+#if ENABLE_BENCHMARK_TEST
+TEST_CASE("test_operator_sub_benchmark") {
+    PriceList d1, d2;
+    for (size_t i = 0; i < 10000; ++i) {
+        d1.push_back(i);
+        d2.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+
+    int cycle = 10000;  // 测试循环次数
+
+    {
+        BENCHMARK_TIME_MSG(Indicator_sub, cycle, HKU_CSTR(""));
+        SPEND_TIME_CONTROL(false);
+        for (int i = 0; i < cycle; i++) {
+            Indicator result = data1 - data2;
+        }
+    }
+}
+#endif
+
+/** @par 检测点 */
+TEST_CASE("test_operator_multi") {
+    /** @arg 正常相乘*/
+    PriceList d1, d2;
+    for (size_t i = 0; i < 10; ++i) {
+        d1.push_back(i);
+        d2.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+    Indicator result = data1 * data2;
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], data1[i] * data2[i]);
+    }
+
+    /** @arg 两个待乘的ind的size不同 */
+    Indicator data3;
+    result = data1 * data3;
+    CHECK_UNARY(result.empty());
+    CHECK_EQ(result.size(), 0);
+
+    /** @arg 两个待乘的ind的size相同，但result_number不同 */
+    StockManager& sm = StockManager::instance();
+    Stock stock = sm.getStock("sh600000");
+    KQuery query(0, 10);
+    KData kdata = stock.getKData(query);
+    Indicator k = KDATA(kdata);
+    CHECK_EQ(k.size(), data1.size());
+    result = k * data1;
+    CHECK_EQ(result.size(), k.size());
+    for (size_t i = 0; i < result.size(); ++i) {
+        CHECK_EQ(result[i], (k[i] * data1[i]));
+    }
+}
+
+#if ENABLE_BENCHMARK_TEST
+TEST_CASE("test_operator_multi_benchmark") {
+    PriceList d1, d2;
+    for (size_t i = 0; i < 10000; ++i) {
+        d1.push_back(i);
+        d2.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+
+    int cycle = 10000;  // 测试循环次数
+
+    {
+        BENCHMARK_TIME_MSG(Indicator_multi, cycle, HKU_CSTR(""));
+        SPEND_TIME_CONTROL(false);
+        for (int i = 0; i < cycle; i++) {
+            Indicator result = data1 * data2;
+        }
+    }
+}
+#endif
+
+/** @par 检测点 */
+TEST_CASE("test_operator_division") {
+    /** @arg 正常相除*/
+    PriceList d1, d2;
+    for (size_t i = 0; i < 10; ++i) {
+        d1.push_back(i);
+        d2.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+    Indicator result = data2 / data1;
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    for (size_t i = 0; i < 10; ++i) {
+        if (data1[i] == 0.0) {
+            CHECK_UNARY((std::isinf(result[i]) || std::isnan(result[i])));
+        } else {
+            CHECK_EQ(result[i], doctest::Approx(data2[i] / data1[i]));
+        }
+    }
+
+    /** @arg 两个待除的ind的size不同 */
+    Indicator data3;
+    result = data1 / data3;
+    CHECK_UNARY(result.empty());
+    CHECK_EQ(result.size(), 0);
+
+    /** @arg 两个待除的ind的size相同，但result_number不同 */
+    StockManager& sm = StockManager::instance();
+    Stock stock = sm.getStock("sh600000");
+    KQuery query(0, 10);
+    KData kdata = stock.getKData(query);
+    Indicator k = KDATA(kdata);
+    CHECK_EQ(k.size(), data1.size());
+    result = k / data1;
+    CHECK_EQ(result.size(), k.size());
+    for (size_t i = 0; i < result.size(); ++i) {
+        if (data1[i] == 0.0) {
+            CHECK_UNARY(std::isinf(result[i]) || std::isnan(result[i]));
+        } else {
+            CHECK_EQ(result[i], doctest::Approx(k[i] / data1[i]));
+        }
+    }
+}
+
+#if ENABLE_BENCHMARK_TEST
+TEST_CASE("test_operator_division_benchmark") {
+    PriceList d1, d2;
+    for (size_t i = 0; i < 10000; ++i) {
+        d1.push_back(i);
+        d2.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+
+    int cycle = 10000;  // 测试循环次数
+
+    {
+        BENCHMARK_TIME_MSG(Indicator_div, cycle, HKU_CSTR(""));
+        SPEND_TIME_CONTROL(false);
+        for (int i = 0; i < cycle; i++) {
+            Indicator result = data1 / data2;
+        }
+    }
+}
+#endif
+
+/** @par 检测点 */
+TEST_CASE("test_operator_mod") {
+    /** @arg 正常取模*/
+    PriceList d1, d2;
+    for (size_t i = 0; i < 10; ++i) {
+        d1.push_back(i);
+        d2.push_back(i + 2);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+    Indicator result = data2 % data1;
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    CHECK_UNARY(std::isnan(result[0]));
+    CHECK_EQ(result[1], 0);
+    CHECK_EQ(result[2], 0);
+    CHECK_EQ(result[3], 2);
+    CHECK_EQ(result[4], 2);
+    CHECK_EQ(result[5], 2);
+    CHECK_EQ(result[6], 2);
+    CHECK_EQ(result[7], 2);
+    CHECK_EQ(result[8], 2);
+    CHECK_EQ(result[9], 2);
+
+    /** @arg 两个待除的ind的size不同 */
+    Indicator data3;
+    result = data1 % data3;
+    CHECK_UNARY(result.empty());
+    CHECK_EQ(result.size(), 0);
+
+    /** @arg 两个待除的ind的size相同，但result_number不同 */
+    StockManager& sm = StockManager::instance();
+    Stock stock = sm.getStock("sh600000");
+    KQuery query(0, 10);
+    KData kdata = stock.getKData(query);
+    Indicator k = KDATA(kdata);
+    CHECK_EQ(k.size(), data1.size());
+    result = k % data1;
+    CHECK_EQ(result.size(), k.size());
+    CHECK_UNARY(std::isnan(result[0]));
+    CHECK_EQ(result[1], 0);
+    CHECK_EQ(result[2], 1);
+    CHECK_EQ(result[3], 1);
+    CHECK_EQ(result[4], 3);
+    CHECK_EQ(result[5], 1);
+    CHECK_EQ(result[6], 3);
+    CHECK_EQ(result[7], 6);
+    CHECK_EQ(result[8], 2);
+    CHECK_EQ(result[9], 8);
+}
+
+#if ENABLE_BENCHMARK_TEST
+TEST_CASE("test_operator_mod_benchmark") {
+    PriceList d1, d2;
+    for (size_t i = 0; i < 10000; ++i) {
+        d1.push_back(i);
+        d2.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+
+    int cycle = 10000;  // 测试循环次数
+
+    {
+        BENCHMARK_TIME_MSG(Indicator_mod, cycle, HKU_CSTR(""));
+        SPEND_TIME_CONTROL(false);
+        for (int i = 0; i < cycle; i++) {
+            Indicator result = data1 % data2;
+        }
+    }
+}
+#endif
+
+/** @par 检测点 */
+TEST_CASE("test_operator_eq") {
+    /** @arg 正常相等*/
+    PriceList d1, d2;
+    for (size_t i = 0; i < 10; ++i) {
+        d1.push_back(i);
+        d2.push_back(i);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+    Indicator result = (data2 == data1);
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], true);
+    }
+
+    /** @arg 两个ind的size不同 */
+    Indicator data3;
+    result = (data1 == data3);
+    CHECK_UNARY(result.empty());
+    CHECK_EQ(result.size(), 0);
+
+    /** @arg 两个ind的size相同，但result_number不同 */
+    StockManager& sm = StockManager::instance();
+    Stock stock = sm.getStock("sh600000");
+    KQuery query(0, 10);
+    KData kdata = stock.getKData(query);
+    Indicator k = KDATA(kdata);
+    CHECK_EQ(k.size(), data1.size());
+    result = (k == data1);
+    CHECK_EQ(result.size(), k.size());
+    for (size_t i = 0; i < result.size(); ++i) {
+        CHECK_EQ(result[i], false);
+    }
+}
+
+#if ENABLE_BENCHMARK_TEST
+TEST_CASE("test_operator_eq_benchmark") {
+    PriceList d1, d2;
+    for (size_t i = 0; i < 10000; ++i) {
+        d1.push_back(i);
+        d2.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+
+    int cycle = 10000;  // 测试循环次数
+
+    {
+        BENCHMARK_TIME_MSG(Indicator_eq, cycle, HKU_CSTR(""));
+        SPEND_TIME_CONTROL(false);
+        for (int i = 0; i < cycle; i++) {
+            Indicator result = data1 == data2;
+        }
+    }
+}
+#endif
+
+/** @par 检测点 */
+TEST_CASE("test_operator_ne") {
+    /** @arg 正常不相等 */
+    PriceList d1, d2;
+    for (size_t i = 0; i < 10; ++i) {
+        d1.push_back(i);
+        d2.push_back(i);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+    Indicator result = (data2 != data1);
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], false);
+    }
+
+    /** @arg 两个ind的size不同  */
+    Indicator data3;
+    result = (data1 != data3);
+    CHECK_UNARY(result.empty());
+    CHECK_EQ(result.size(), 0);
+
+    /** @arg 两个ind的size相同，但result_number不同 */
+    StockManager& sm = StockManager::instance();
+    Stock stock = sm.getStock("sh600000");
+    KQuery query(0, 10);
+    KData kdata = stock.getKData(query);
+    Indicator k = KDATA(kdata);
+    CHECK_EQ(k.size(), data1.size());
+    result = (k != data1);
+    CHECK_EQ(result.size(), k.size());
+    for (size_t i = 0; i < result.size(); ++i) {
+        CHECK_EQ(result[i], true);
+    }
+}
+
+/** @par 检测点 */
+TEST_CASE("test_operator_gt") {
+    PriceList d1, d2, d3;
+    for (size_t i = 0; i < 10; ++i) {
+        d1.push_back(i);
+        d2.push_back(i);
+        d3.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+    Indicator data3 = PRICELIST(d3);
+
+    /** @arg ind1 > ind2*/
+    Indicator result = (data3 > data1);
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 1.0);
+    }
+
+    /** @arg ind1 < ind2 */
+    result = (data1 > data3);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 0.0);
+    }
+
+    /** @arg ind1 == ind2 */
+    result = (data1 > data2);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 0.0);
+    }
+
+    /** @arg 两个ind的size不同 */
+    Indicator data4;
+    result = data1 > data4;
+    CHECK_UNARY(result.empty());
+    CHECK_EQ(result.size(), 0);
+
+    /** @arg 两个ind的size相同，但result_number不同 */
+    StockManager& sm = StockManager::instance();
+    Stock stock = sm.getStock("sh600000");
+    KQuery query(0, 10);
+    KData kdata = stock.getKData(query);
+    Indicator k = KDATA(kdata);
+    CHECK_EQ(k.size(), data1.size());
+    result = (k > data1);
+    CHECK_EQ(result.size(), k.size());
+    for (size_t i = 0; i < result.size(); ++i) {
+        CHECK_EQ(result[i], 1.0);
+    }
+}
+
+/** @par 检测点 */
+TEST_CASE("test_operator_ge") {
+    PriceList d1, d2, d3;
+    for (size_t i = 0; i < 10; ++i) {
+        d1.push_back(i);
+        d2.push_back(i);
+        d3.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+    Indicator data3 = PRICELIST(d3);
+
+    /** @arg ind1 > ind2*/
+    Indicator result = (data3 >= data1);
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 1.0);
+    }
+
+    /** @arg ind1 < ind2 */
+    result = (data1 >= data3);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 0.0);
+    }
+
+    /** @arg ind1 == ind2 */
+    result = (data1 >= data2);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 1.0);
+    }
+
+    /** @arg 两个ind的size不同 */
+    Indicator data4;
+    result = data1 >= data4;
+    CHECK_UNARY(result.empty());
+    CHECK_EQ(result.size(), 0);
+
+    /** @arg 两个ind的size相同，但result_number不同 */
+    StockManager& sm = StockManager::instance();
+    Stock stock = sm.getStock("sh600000");
+    KQuery query(0, 10);
+    KData kdata = stock.getKData(query);
+    Indicator k = KDATA(kdata);
+    CHECK_EQ(k.size(), data1.size());
+    result = (k >= data1);
+    CHECK_EQ(result.size(), k.size());
+    for (size_t i = 0; i < result.size(); ++i) {
+        CHECK_EQ(result[i], 1.0);
+    }
+}
+
+/** @par 检测点 */
+TEST_CASE("test_operator_lt") {
+    PriceList d1, d2, d3;
+    for (size_t i = 0; i < 10; ++i) {
+        d1.push_back(i);
+        d2.push_back(i);
+        d3.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+    Indicator data3 = PRICELIST(d3);
+
+    /** @arg ind1 > ind2*/
+    Indicator result = (data3 < data1);
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 0.0);
+    }
+
+    /** @arg ind1 < ind2 */
+    result = (data1 < data3);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 1.0);
+    }
+
+    /** @arg ind1 == ind2 */
+    result = (data1 < data2);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 0.0);
+    }
+
+    /** @arg 两个ind的size不同 */
+    Indicator data4;
+    result = data1 < data4;
+    CHECK_UNARY(result.empty());
+    CHECK_EQ(result.size(), 0);
+
+    /** @arg 两个ind的size相同，但result_number不同 */
+    StockManager& sm = StockManager::instance();
+    Stock stock = sm.getStock("sh600000");
+    KQuery query(0, 10);
+    KData kdata = stock.getKData(query);
+    Indicator k = KDATA(kdata);
+    CHECK_EQ(k.size(), data1.size());
+    result = (k < data1);
+    CHECK_EQ(result.size(), k.size());
+    for (size_t i = 0; i < result.size(); ++i) {
+        CHECK_EQ(result[i], 0.0);
+    }
+}
+
+/** @par 检测点 */
+TEST_CASE("test_operator_le") {
+    PriceList d1, d2, d3;
+    for (size_t i = 0; i < 10; ++i) {
+        d1.push_back(i);
+        d2.push_back(i);
+        d3.push_back(i + 1);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+    Indicator data3 = PRICELIST(d3);
+
+    /** @arg ind1 > ind2*/
+    Indicator result = (data3 <= data1);
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 0.0);
+    }
+
+    /** @arg ind1 < ind2 */
+    result = (data1 <= data3);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 1.0);
+    }
+
+    /** @arg ind1 == ind2 */
+    result = (data1 <= data2);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 1.0);
+    }
+
+    /** @arg 两个ind的size不同 */
+    Indicator data4;
+    result = data1 <= data4;
+    CHECK_UNARY(result.empty());
+    CHECK_EQ(result.size(), 0);
+
+    /** @arg 两个ind的size相同，但result_number不同 */
+    StockManager& sm = StockManager::instance();
+    Stock stock = sm.getStock("sh600000");
+    KQuery query(0, 10);
+    KData kdata = stock.getKData(query);
+    Indicator k = KDATA(kdata);
+    CHECK_EQ(k.size(), data1.size());
+    result = (k <= data1);
+    CHECK_EQ(result.size(), k.size());
+    for (size_t i = 0; i < result.size(); ++i) {
+        CHECK_EQ(result[i], 0.0);
+    }
+}
+
+/** @par 检测点 */
+TEST_CASE("test_getResult_getResultAsPriceList") {
+    StockManager& sm = StockManager::instance();
+    Stock stock = sm.getStock("sh600000");
+    KQuery query;
+    KData kdata;
+    Indicator ikdata, result1;
+    PriceList result2;
+
+    /** @arg 源数据为空 */
+    ikdata = KDATA(kdata);
+    result1 = ikdata.getResult(0);
+    result2 = ikdata.getResultAsPriceList(0);
+    CHECK_EQ(result1.size(), 0);
+    CHECK_EQ(result2.size(), 0);
+
+    /** @arg result_num参数非法 */
+    query = KQuery(0, 10);
+    kdata = stock.getKData(query);
+    ikdata = KDATA(kdata);
+    CHECK_EQ(ikdata.size(), 10);
+    result1 = ikdata.getResult(6);
+    result2 = ikdata.getResultAsPriceList(6);
+    CHECK_EQ(result1.size(), 0);
+    CHECK_EQ(result2.size(), 0);
+
+    /** @arg 正常获取 */
+    result1 = ikdata.getResult(0);
+    result2 = ikdata.getResultAsPriceList(1);
+    CHECK_EQ(result1.size(), 10);
+    CHECK_EQ(result2.size(), 10);
+    CHECK_EQ(result1[0], 29.5);
+    CHECK_LT(std::fabs(result1[1] - 27.58), 0.0001);
+    CHECK_EQ(result1[9], doctest::Approx(26.45));
+
+    CHECK_EQ(result2[0], doctest::Approx(29.8));
+    CHECK_EQ(result2[1], doctest::Approx(28.38));
+    CHECK_EQ(result2[9], doctest::Approx(26.55));
+}
+
+/** @par 检测点 */
+TEST_CASE("test_LOGIC_AND") {
+    PriceList d1, d2, d3;
+    for (size_t i = 0; i < 10; ++i) {
+        d1.push_back(0);
+        d2.push_back(1);
+        d3.push_back(i);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+    Indicator data3 = PRICELIST(d3);
+
+    /** @arg ind1为全0， ind2为全1 */
+    Indicator result = data1 & data2;
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 0.0);
+    }
+
+    /** @arg ind为全0， val为1 */
+    /*result = IND_AND(data1, 1.0);
+    BOOST_CHECK(result.size() == 10);
+    BOOST_CHECK(result.getResultNumber() == 1);
+    BOOST_CHECK(result.discard() == 0);
+    for (size_t i = 0; i < 10; ++i) {
+        BOOST_CHECK(result[i] == 0.0);
+    }*/
+
+    /** @arg ind1为全0， ind2为从0开始的整数 */
+    result = data1 & data3;
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 0.0);
+    }
+
+    /** @arg ind1为全1， ind2为从0开始的整数 */
+    result = data2 & data3;
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    CHECK_EQ(result[0], 0.0);
+    for (size_t i = 1; i < 10; ++i) {
+        CHECK_EQ(result[i], 1.0);
+    }
+
+    /** @arg 两个ind的size不同 */
+    Indicator data4;
+    result = data1 & data4;
+    CHECK_UNARY(result.empty());
+    CHECK_EQ(result.size(), 0);
+}
+
+/** @par 检测点 */
+TEST_CASE("test_LOGIC_OR") {
+    PriceList d1, d2, d3;
+    for (size_t i = 0; i < 10; ++i) {
+        d1.push_back(0);
+        d2.push_back(1);
+        d3.push_back(i);
+    }
+
+    Indicator data1 = PRICELIST(d1);
+    Indicator data2 = PRICELIST(d2);
+    Indicator data3 = PRICELIST(d3);
+
+    /** @arg ind1为全0， ind2为全1 */
+    Indicator result = data1 | data2;
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 1.0);
+    }
+
+    /** @arg ind1为全0， ind2为从0开始的整数 */
+    result = data1 | data3;
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    CHECK_EQ(result[0], 0.0);
+    for (size_t i = 1; i < 10; ++i) {
+        CHECK_EQ(result[i], 1.0);
+    }
+
+    /** @arg ind1为全1， ind2为从0开始的整数 */
+    result = data2 | data3;
+    CHECK_EQ(result.size(), 10);
+    CHECK_EQ(result.getResultNumber(), 1);
+    CHECK_EQ(result.discard(), 0);
+    for (size_t i = 0; i < 10; ++i) {
+        CHECK_EQ(result[i], 1.0);
+    }
+
+    /** @arg 两个ind的size不同 */
+    Indicator data4;
+    result = data1 | data4;
+    CHECK_UNARY(result.empty());
+    CHECK_EQ(result.size(), 0);
+}
+
+/** @par 检测点 */
+TEST_CASE("test_indicator_increment_calculate") {
+    auto VAR1 = LLV(LOW(), 13);
+    auto VAR2 = HHV(HIGH(), 13);
+    auto VAR3 = SMA((CLOSE() - VAR1) / (VAR2 - VAR1) * 100, 5, 1);
+    auto VAR4 = SMA((VAR2 - CLOSE()) / (VAR2 - VAR1) * 100, 5, 1);
+    auto AA = VAR3;
+    auto BB = VAR4;
+    auto VAR5 = SMA(MAX(CLOSE() - REF(CLOSE(), 1), 0), 5, 1) /
+                SMA(ABS(CLOSE() - REF(CLOSE(), 1)), 5, 1) * 100;
+    auto CC = EMA(VAR5, 3);
+    auto XG = CROSS(CC, BB) & (CC >= REF(CC, 1)) & (BB <= REF(BB, 3)) & (CC >= 49.5) &
+              (MA(CLOSE(), 3) >= REF(MA(CLOSE(), 3), 1)) &
+              (MA(CLOSE(), 7) >= REF(MA(CLOSE(), 7), 1)) &
+              (MA(CLOSE(), 60) > REF(MA(CLOSE(), 60), 3));
+
+    Stock stk = getStock("sh600000");
+    KData k1 = stk.getKData(KQuery(100, 300));
+    KData k2 = stk.getKData(KQuery(200, 500));
+    auto x = XG(k1);
+    auto y = XG(k2);
+    x.setContext(k2);
+    CHECK_EQ(x.size(), y.size());
+    CHECK_EQ(x[159], 1.0);
+    CHECK_EQ(x[159], y[159]);
+}
+
+/** @par 检测点 */
+TEST_CASE("test_combineCalculateIndicators") {
+    StockManager& sm = StockManager::instance();
+    Stock stock = sm.getStock("sh600000");
+    KQuery query(0, 20);
+    KData kdata = stock.getKData(query);
+
+    /** @arg 空指标列表 */
+    IndicatorList empty_indicators;
+    IndicatorList result = combineCalculateIndicators(empty_indicators, kdata);
+    CHECK_EQ(result.size(), 0);
+
+    /** @arg 单个简单指标 */
+    Indicator close_ind = CLOSE();
+    IndicatorList single_indicator{close_ind};
+    result = combineCalculateIndicators(single_indicator, kdata);
+    check_indicator(result[0], CLOSE(kdata));
+
+    /** @arg 多个简单指标 */
+    Indicator open_ind = OPEN();
+    Indicator high_ind = HIGH();
+    Indicator low_ind = LOW();
+    IndicatorList multi_indicators{close_ind, open_ind, high_ind, low_ind};
+    result = combineCalculateIndicators(multi_indicators, kdata);
+    CHECK_EQ(result.size(), 4);
+    check_indicator(result[0], CLOSE(kdata));
+    check_indicator(result[1], OPEN(kdata));
+    check_indicator(result[2], HIGH(kdata));
+    check_indicator(result[3], LOW(kdata));
+
+    /** @arg 包含复合指标 */
+    Indicator ma_close = MA(CLOSE(), 5);
+    Indicator rsi_close = RSI(CLOSE(), 14);
+    IndicatorList complex_indicators{ma_close, rsi_close};
+    result = combineCalculateIndicators(complex_indicators, kdata);
+    check_indicator(result[0], MA(CLOSE(kdata), 5));
+    check_indicator(result[1], RSI(CLOSE(kdata), 14));
+
+    /** @arg 测试 tovalue 参数为 true */
+    result = combineCalculateIndicators(complex_indicators, kdata, true);
+    CHECK_EQ(result.size(), 2);
+    // 当 tovalue 为 true 时，应该只返回第一个结果列
+    CHECK_EQ(result[0].getResultNumber(), 1);
+    CHECK_EQ(result[1].getResultNumber(), 1);
+    CHECK_UNARY(result[0].equal(MA(CLOSE(kdata), 5)));
+    CHECK_UNARY(result[1].equal(RSI(CLOSE(kdata), 14)));
+
+    /** @arg 测试不同的 KData 上下文 */
+    KQuery query2(10, 30);
+    KData kdata2 = stock.getKData(query2);
+    result = combineCalculateIndicators(multi_indicators, kdata2);
+    check_indicator(result[0], CLOSE(kdata2));
+    check_indicator(result[1], OPEN(kdata2));
+    check_indicator(result[2], HIGH(kdata2));
+    check_indicator(result[3], LOW(kdata2));
+
+    /** @arg 测试包含相同子节点的指标（应该去重） */
+    Indicator close1 = CLOSE();
+    Indicator close2 = CLOSE();  // 相同的指标
+    IndicatorList duplicate_indicators{close1, close2};
+    result = combineCalculateIndicators(duplicate_indicators, kdata);
+    CHECK_EQ(result.size(), 2);
+    // 虽然是相同的指标，但是会被克隆成不同的实例
+    CHECK_NE(result[0].getImp().get(), result[1].getImp().get());
+    check_indicator(result[0], CLOSE(kdata));
+    check_indicator(result[1], CLOSE(kdata));
+}
+
+/** @} */

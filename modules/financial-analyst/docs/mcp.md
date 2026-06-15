@@ -1,0 +1,277 @@
+# MCP Server — Claude Desktop / Claude Code Integration
+
+`financial-analyst-mcp` exposes **20 tools** to Claude Desktop / Claude Code / Cursor / Codex CLI via the [Model Context Protocol](https://modelcontextprotocol.io/).
+
+After this is set up, you can say in Claude Desktop / Claude Code:
+
+> "Look at SH600519 — is it a buy?"
+
+and Claude will autonomously call `ask`, `quick_quote`, `read_past_report`, etc. through your local `financial-analyst-mcp` subprocess.
+
+## Setup
+
+### 1. Install (or upgrade) financial-analyst
+
+```bash
+pip install -U financial-analyst
+```
+
+This installs both `financial-analyst` and `financial-analyst-mcp` console scripts.
+
+### 2a. Configure Claude Desktop
+
+Edit `~/.config/claude/claude_desktop_config.json` (Linux/Mac) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "financial-analyst": {
+      "command": "financial-analyst-mcp",
+      "args": [],
+      "env": {
+        "TUSHARE_TOKEN": "your-tushare-token",
+        "DASHSCOPE_API_KEY": "your-aliyun-key"
+      }
+    }
+  }
+}
+```
+
+(The env block is optional if your `.env` is set up; `financial-analyst-mcp` also loads `.env` at startup.)
+
+### 2b. Configure Claude Code (CLI / VS Code)
+
+Use the `claude mcp add` command:
+
+```bash
+claude mcp add financial-analyst -- financial-analyst-mcp
+```
+
+Or manually edit `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "financial-analyst": {
+      "type": "stdio",
+      "command": "financial-analyst-mcp",
+      "args": [],
+      "env": {
+        "DASHSCOPE_API_KEY": "your-key"
+      }
+    }
+  }
+}
+```
+
+Then in any Claude Code session, the tools auto-appear (verify with `/mcp`).
+
+### 2c. Configure Cursor (IDE)
+
+Cursor 用跟 Claude Desktop 同源的 JSON 配置, 路径:
+
+- **全局**: `~/.cursor/mcp.json` (Linux/Mac) · `%APPDATA%\Cursor\User\mcp.json` (Windows)
+- **项目级**: `<project-root>/.cursor/mcp.json` (覆盖全局)
+
+```json
+{
+  "mcpServers": {
+    "financial-analyst": {
+      "command": "financial-analyst-mcp",
+      "args": [],
+      "env": {
+        "DASHSCOPE_API_KEY": "your-aliyun-key"
+      }
+    }
+  }
+}
+```
+
+Restart Cursor. Composer / Chat 会自动发现工具, 用 `@financial-analyst` 提及触发, 或让 agent 自主调.
+
+### 2d. Configure Codex CLI
+
+OpenAI Codex CLI 用 TOML, 路径 `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.financial-analyst]
+command = "financial-analyst-mcp"
+args = []
+# 把本地 env var 安全转发给 server (推荐, key 不进 config 文件)
+env_vars = ["DASHSCOPE_API_KEY", "TUSHARE_TOKEN"]
+
+# 或者 hardcode 进配置 (需要时这样写, 不推荐):
+# [mcp_servers.financial-analyst.env]
+# DASHSCOPE_API_KEY = "your-key"
+```
+
+字段说明 (来自 OpenAI Codex 官方 [MCP doc](https://developers.openai.com/codex/mcp)):
+- `command` — 启动 server 的可执行文件
+- `args` — 传给可执行文件的参数数组
+- `env_vars` — 从本地 shell **转发** 这些 env var 给 server (推荐, secrets 不写盘)
+- `[mcp_servers.<name>.env]` — 直接 **set** env var 给 server (key 会写在 config 里, 慎用)
+
+重启 codex, `/mcp` list 看 `financial-analyst` 出现 + 13 个 tool 注册.
+
+### 2e. Verify install
+
+```bash
+# 进任意 venv 后跑
+python -m financial_analyst.mcp_server --help    # 不会有输出 (stdio mode), 应安静退出
+financial-analyst-mcp                            # 同上
+```
+
+如果 `financial-analyst-mcp` 命令不存在: `pip install --force-reinstall financial-analyst` 重生成 console scripts.
+
+### 3. Restart Claude Desktop / reload Claude Code
+
+Tools should appear in the tool drawer / `/mcp` list.
+
+---
+
+## 3. Streamable HTTP transport (远程 IDE / JetBrains / 跨进程)
+
+如果你的 AI IDE 不会 spawn stdio 子进程 (典型: JetBrains 系全家桶) — 或者你想让多个 IDE / 脚本 / 远程进程共享同一份 fa, 可以走 **HTTP MCP**.
+
+### 0. Endpoint
+
+```
+http://127.0.0.1:9999/mcp
+```
+
+**前提**: `fa start` 已经跑起来 (会自动启 buddy backend on :9999). MCP 自动 mount 在 `/mcp` 子路径, 不需要额外起 server, 不需要 token. 默认只绑 127.0.0.1, 外网 reach 不到.
+
+### 3a. Claude Desktop / Claude Code (HTTP)
+
+跟 stdio 不同, 用 `url` 字段而不是 `command`:
+
+```json
+{
+  "mcpServers": {
+    "financial-analyst-http": {
+      "url": "http://127.0.0.1:9999/mcp"
+    }
+  }
+}
+```
+
+可以**同时**保留 §2 的 stdio 配置 (`financial-analyst` server) — 两个 server name 不冲突, 各走各的 transport, 暴露的 20 个 tool 完全相同.
+
+### 3b. Cursor
+
+`~/.cursor/mcp.json` (全局) 或 `<project>/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "financial-analyst-http": {
+      "url": "http://127.0.0.1:9999/mcp"
+    }
+  }
+}
+```
+
+### 3c. Codex CLI
+
+`~/.codex/config.toml`:
+
+```toml
+[mcp_servers.financial-analyst-http]
+url = "http://127.0.0.1:9999/mcp"
+```
+
+字段来自 [OpenAI Codex MCP 官方文档](https://developers.openai.com/codex/mcp): streamable HTTP server 用 `url` (required), 可选 `bearer_token_env_var` / `http_headers` / `enabled_tools` / `tool_timeout_sec` (本地 localhost 场景不需要).
+
+### 3d. JetBrains IDE (PyCharm / IntelliJ AI Assistant)
+
+任何支持 MCP HTTP 的 JetBrains AI 扩展 (例如 Junie 或第三方 MCP plugin), 配同样的 URL 即可. 具体注册路径看插件文档.
+
+### 长任务 (跟 §2 stdio 一样)
+
+HTTP transport **不改变** long-task 边界: `report` 5-10 min / `data_update` 3-30 min / `brief` 1-3 min 仍可能撞 client 端默认 5-min tool-call timeout. 解决方案 (跟 stdio 同):
+
+1. 让 Claude/Codex 调 `ask` 做轻问答
+2. 重活本地跑: `financial-analyst report SH600519`
+3. 然后 MCP 调 `read_past_report` 拿结果
+
+未来 spec 会加 MCP `notifications/progress` 让 long task 真 streaming, 本 release 暂不实现.
+
+### Troubleshooting (HTTP-specific)
+
+| Symptom | Fix |
+|---------|-----|
+| Client 报 406 / "Not Acceptable" | client 没发 `Accept: application/json, text/event-stream` header — 升级到支持 MCP streamable HTTP 的 client 版本 |
+| Connection refused | buddy 没跑. 先 `fa start` 或 `fa serve` |
+| Tools 同时出现两次 (一份 stdio + 一份 HTTP) | 预期行为 — 你两套都配了. 删掉一份, 或保留两份用不同 server name 区分 |
+| 想让 LAN 设备连 | 当前 spec 不支持. 后续 spec 会加 token auth 来开 0.0.0.0 binding (use case B) |
+
+---
+
+## Available Tools
+
+| Tool | Speed | Use case |
+|---|---|---|
+| `ask` | ~10-30s | "What did the last report say about SH600519?" |
+| `quick_quote` | <1s | "Current PE of SH600519" |
+| `quick_factors` | ~1s | "Show me the rev_20 factor for SZ002594" |
+| `memory_search` | <1s | "Are there pitfalls about game-capital tickers?" |
+| `list_past_reports` | <1s | "What stocks have I researched recently?" |
+| `read_past_report` | <1s | "Show me my full report on SH600519" |
+| `list_dream_proposals` | <1s | "Are there any pending memory updates?" |
+| `report` | 5-10min ⚠ | "Run a full deep-dive on SH600519" — may time out in MCP client |
+| `mainline` | ~30s | "Which sectors are mainline this month?" |
+| `brief` | 1-3min | "Generate today's morning brief" |
+| `intraday` | ~30-60s | "Lunch-break review of my positions" |
+| `dream` | ~30-60s | "Introspect my recent reports for biases" (T+5d outcome 反推) |
+| `dream_aggregate` | <5s | "Cluster Tier-4 introspector pending proposals (重复 ≥3 → 升级 _proposed/)" |
+| `overseas_radar` | 1-2min | "今天海外传导对 A 股影响?" — overnight US/HK + global news → A 股 follow-through |
+| `data_update` | 3-5min (基础); +30min `include_f10` | "Refresh data for SH600519 before research" — wraps `fa data update` subprocess |
+| `chain_lookup` | <1s | "What industry chain is SH688256 in?" — primary product + peers + 上下游 (ChainKBLoader) |
+| `accept_proposal` | <1s | "Accept the bear-advocate/F15_new_pitfall proposal from the last dream loop" — promotes `_proposed/<agent>/<slug>.md` to active memory, audit + git stage. `dry_run=true` previews. |
+| `reject_proposal` | <1s | "Discard the whale-analyst/bad_signal proposal" — deletes file from `_proposed/`, writes audit. |
+| `revert_proposal` | <1s | "Undo my last accept of risk-officer/over_strict_rule" — moves the file back to `_proposed/`, audit links to original accept id. |
+| `list_audit` | <1s | "Show me the last 20 memory mutations" — newest-first entries from `~/.financial-analyst/audit.jsonl`. |
+
+### About `report` timeout
+
+The full 13-agent deep-dive can take 5-10 minutes. Most MCP clients (including Claude Desktop) default to ~5-min tool-call timeout. If `report` times out:
+
+1. Use Claude Desktop to call `ask` instead for quick questions
+2. Run `report` locally: `financial-analyst report SH600519`
+3. Then in Claude Desktop, call `read_past_report` to get the result
+
+## Security model
+
+`financial-analyst-mcp` runs as a local subprocess. It:
+- Reads/writes files under your project's `out/`, `memories/_proposed/`, `~/.financial-analyst/`
+- Calls Tushare / LLM provider APIs using YOUR keys
+- Honors `config/plugins.yaml` (loads your private BYOM models)
+- Does NOT expose arbitrary shell command execution to Claude Desktop
+- **Writes to `memories/<agent>/` ONLY via `accept_proposal` (promotes from `_proposed/`) and `revert_proposal` (demotes back). Every accept/reject/revert is logged to `~/.financial-analyst/audit.jsonl` with source attribution (`cli` / `mcp` / future `buddy`). Cannot create arbitrary memory content — only promote LLM-vetted proposals from the dream loop. Git-stages every memory file change so `git diff` shows what changed before you commit.**
+
+Each tool is a Python function with a strict JSON schema for input — Claude cannot pass arbitrary code.
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Claude Desktop doesn't show tools | Check the path: `which financial-analyst-mcp` — must be on PATH where Claude can find it. Use absolute path in config 若 PATH 没装 |
+| `financial-analyst-mcp` 命令不存在 | `pip install --force-reinstall financial-analyst` 重新生成 console scripts. 验证 `ls ~/.venv/Scripts/` (Windows) 或 `ls .venv/bin/` (Unix) 应见 |
+| Tool calls fail with "no Tushare token" | Add `TUSHARE_TOKEN` to the `env` block. **新版本不需要** — pytdx 直连默认 |
+| `report` always times out | Use `ask` for short queries, run `report` locally |
+| Unicode errors | Set `PYTHONIOENCODING=utf-8` in the `env` block |
+| Claude Code `/mcp` 显示 disconnected | 检查 `claude_desktop_config.json` JSON 合法 + restart Claude Code 完整退出 (Ctrl+C twice + relaunch) |
+| 想看 MCP 流量 debug | Claude Desktop: 启用 `MCP_DEBUG=1` 环境变量, log 到 `~/Library/Logs/Claude/mcp*.log` (mac) |
+
+## 与 buddy SSE bridge 的差异
+
+financial-analyst 同时支持两套通信协议:
+
+| 维度 | MCP (financial-analyst-mcp) | SSE Bridge (financial-analyst serve) |
+|------|---------|---------|
+| 协议 | stdio JSON-RPC (MCP spec) | HTTP + Server-Sent Events |
+| 客户端 | Claude Desktop / Claude Code / OpenClaw | GuanLan UI / 自定义 web client / curl |
+| 启动 | Claude Desktop spawn subprocess | `financial-analyst serve --port 9999` |
+| Tools | 13 (本文档) | 30 (含 update_data, alert_*, conversations 等) |
+| Use case | LLM 自主调工具 (Claude 大模型决策) | UI 后端 (前端 React 调) |
+| 长任务 (report 5+ min) | ⚠ 大多 client 默认 5 min timeout | ✓ SSE 流式 + /report-progress 轮询 |

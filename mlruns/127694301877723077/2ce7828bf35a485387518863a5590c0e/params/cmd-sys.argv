@@ -1,0 +1,1 @@
+python/qlib_service.py train --model-name csi300_lgb_v1 --market csi300 --model-type lgb

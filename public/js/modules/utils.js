@@ -58,6 +58,21 @@ function escapeHTML(str) {
   return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
+// CSV 导出工具
+function exportCSV(filename, headers, rows) {
+  const BOM = "﻿"; // UTF-8 BOM for Excel
+  const csv = BOM + headers.join(",") + "\n" +
+    rows.map(row => headers.map(h => {
+      const v = row[h] != null ? String(row[h]) : "";
+      return v.includes(",") || v.includes('"') ? '"' + v.replace(/"/g, '""') + '"' : v;
+    }).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement("a"), { href: url, download: filename });
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // 导出到全局
 window.$ = $;
 window.$$ = $$;
@@ -67,3 +82,4 @@ window.fmtFlowRate = fmtFlowRate;
 window.formatNum = formatNum;
 window.animateNumber = animateNumber;
 window.escapeHTML = escapeHTML;
+window.exportCSV = exportCSV;

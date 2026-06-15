@@ -129,6 +129,24 @@
       <div class="chart-mid" id="chartRiskDecomp"></div>
       <div class="card stress-table" id="stressTable"></div>
     </section>
+
+    <!-- 面板4: ML模型 -->
+    <section class="panel" id="panelML">
+      <div class="panel-header">
+        <h2>ML 模型 <span style="font-weight:400;font-size:11px;color:#5f6b8a;">基于 Qlib + LightGBM 的 AI 选股</span></h2>
+        <div class="opt-controls">
+          <select id="mlModelSelect" style="width:200px;"><option value="">加载中...</option></select>
+          <button id="btnMLTrain" class="btn btn-primary btn-xs">训练新模型</button>
+          <button id="btnMLRefresh" class="btn btn-outline btn-xs">刷新</button>
+        </div>
+      </div>
+      <div class="port-grid">
+        <div class="chart-mid" id="chartMLIC"></div>
+        <div class="chart-mid" id="chartMLBar"></div>
+      </div>
+      <div class="risk-grid" id="mlMetrics" style="margin-top:12px;"></div>
+      <div id="mlTrainStatus" style="display:none;padding:12px;background:#1a1d2e;border-radius:6px;margin-top:8px;color:#8890b5;font-size:12px;"></div>
+    </section>
   </div>
 </div>
 

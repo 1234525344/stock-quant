@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自选股 - 量化交易平台</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0a0e17; color: #e1e5ee; min-height: 100vh; }
+
+    .header { background: linear-gradient(135deg, #1a1f2e 0%, #0d1117 100%); padding: 16px 24px; border-bottom: 1px solid #21262d; display: flex; align-items: center; justify-content: space-between; }
+    .header h1 { font-size: 20px; color: #58a6ff; }
+    .header-actions { display: flex; gap: 12px; }
+
+    .btn { padding: 8px 16px; border-radius: 6px; border: 1px solid #30363d; background: #21262d; color: #c9d1d9; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+    .btn:hover { background: #30363d; border-color: #58a6ff; }
+    .btn-primary { background: #238636; border-color: #2ea043; color: #fff; }
+    .btn-primary:hover { background: #2ea043; }
+    .btn-danger { background: #da3633; border-color: #f85149; color: #fff; }
+    .btn-danger:hover { background: #f85149; }
+
+    .search-box { display: flex; gap: 8px; margin: 16px 24px; }
+    .search-input { flex: 1; padding: 10px 16px; border-radius: 6px; border: 1px solid #30363d; background: #161b22; color: #c9d1d9; font-size: 14px; outline: none; }
+    .search-input:focus { border-color: #58a6ff; }
+    .search-input::placeholder { color: #484f58; }
+
+    .watchlist-table { width: 100%; border-collapse: collapse; margin: 0 24px; width: calc(100% - 48px); }
+    .watchlist-table th { background: #161b22; padding: 12px 16px; text-align: left; font-weight: 600; color: #8b949e; border-bottom: 1px solid #21262d; position: sticky; top: 0; }
+    .watchlist-table td { padding: 12px 16px; border-bottom: 1px solid #21262d; }
+    .watchlist-table tr:hover { background: #161b22; }
+
+    .code { color: #58a6ff; font-family: monospace; }
+    .name { color: #c9d1d9; }
+    .price { font-weight: 600; font-family: monospace; }
+    .change { font-weight: 600; }
+    .positive { color: #f85149; }
+    .negative { color: #3fb950; }
+    .zero { color: #8b949e; }
+
+    .volume, .amount { color: #8b949e; font-family: monospace; }
+
+    .actions { display: flex; gap: 8px; }
+    .btn-sm { padding: 4px 8px; font-size: 12px; }
+
+    .empty-state { text-align: center; padding: 60px 24px; color: #8b949e; }
+    .empty-state h3 { margin-bottom: 12px; color: #c9d1d9; }
+
+    .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; }
+    .modal.active { display: flex; }
+    .modal-content { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px; width: 400px; max-width: 90vw; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .modal-header h3 { color: #c9d1d9; }
+    .modal-close { background: none; border: none; color: #8b949e; cursor: pointer; font-size: 24px; }
+    .modal-close:hover { color: #c9d1d9; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; margin-bottom: 6px; color: #8b949e; font-size: 14px; }
+    .form-group input, .form-group select { width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid #30363d; background: #0d1117; color: #c9d1d9; font-size: 14px; outline: none; }
+    .form-group input:focus, .form-group select:focus { border-color: #58a6ff; }
+
+    .type-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+    .type-stock { background: #1f6feb33; color: #58a6ff; }
+    .type-etf { background: #23863633; color: #3fb950; }
+    .type-option { background: #9e6a0333; color: #d29922; }
+
+    .refresh-btn { animation: spin 1s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    .stats { display: flex; gap: 24px; padding: 16px 24px; background: #161b22; border-bottom: 1px solid #21262d; }
+    .stat-item { display: flex; flex-direction: column; }
+    .stat-label { font-size: 12px; color: #8b949e; }
+    .stat-value { font-size: 18px; font-weight: 600; }
+
+    .qty-input { width: 80px; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 8px; border-radius: 4px; text-align: right; }
+    .qty-input:focus { border-color: #58a6ff; outline: none; }
+
+    .group-tabs { display: flex; gap: 8px; padding: 12px 24px; background: #161b22; border-bottom: 1px solid #21262d; flex-wrap: wrap; }
+    .group-tab { padding: 8px 16px; border-radius: 6px; border: 1px solid #30363d; background: #21262d; color: #c9d1d9; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+    .group-tab:hover { background: #30363d; border-color: #58a6ff; }
+    .group-tab.active { background: #58a6ff; border-color: #58a6ff; color: #fff; }
+    .group-tab .delete-btn { margin-left: 8px; opacity: 0.6; cursor: pointer; }
+    .group-tab .delete-btn:hover { opacity: 1; color: #f85149; }
+
+    .sortable { cursor: pointer; user-select: none; }
+    .sortable:hover { background: #21262d; }
+    .sortable span { font-size: 10px; margin-left: 4px; }
+
+    .group-tab.option-group { background: linear-gradient(135deg, #9e6a03, #d29922); border-color: #d29922; color: #fff; }
+    .group-tab.option-group.active { background: linear-gradient(135deg, #d29922, #e3b341); }
+
+    .group-add-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; border: 1px dashed #30363d; background: transparent; color: #8b949e; cursor: pointer; font-size: 18px; font-weight: 300; margin-left: 4px; transition: all 0.2s; vertical-align: middle; }
+    .group-add-btn:hover { border-color: #58a6ff; color: #58a6ff; background: #1a1f2e; }
+
+    .module-tabs { display: flex; gap: 0; padding: 0 24px; background: #0d1117; border-bottom: 2px solid #21262d; }
+    .module-tab { padding: 12px 24px; cursor: pointer; font-size: 16px; font-weight: 600; color: #8b949e; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+    .module-tab:hover { color: #c9d1d9; }
+    .module-tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+    .module-tab.option-tab.active { color: #d29922; border-bottom-color: #d29922; }
+
+    .module-content { display: none; }
+    .module-content.active { display: block; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>⭐ 自选股 & 期权</h1>
+    <div class="header-actions">
+      <button class="btn" onclick="refreshAll()">🔄 刷新</button>
+    </div>
+  </div>
+
+  <!-- 模块切换标签 -->
+  <div class="module-tabs">
+    <div class="module-tab active" onclick="switchModule('stock')">📊 自选股</div>
+    <div class="module-tab option-tab" onclick="switchModule('option')">📈 期权</div>
+  </div>
+
+  <!-- 自选股模块 -->
+  <div class="module-content active" id="stockModule">
+    <div class="group-tabs" id="groupTabs">
+      <!-- 动态生成分组标签 -->
+    </div>
+    <span class="group-add-btn" onclick="showAddGroupModal()" title="新建自选股分组">＋</span>
+
+    <div class="stats" id="stockStats">
+      <div class="stat-item">
+        <span class="stat-label">总数</span>
+        <span class="stat-value" id="stockCount">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">上涨</span>
+        <span class="stat-value positive" id="stockUpCount">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">下跌</span>
+        <span class="stat-value negative" id="stockDownCount">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">股票收益</span>
+        <span class="stat-value" id="stockPnl">0.00</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">期权收益</span>
+        <span class="stat-value" id="optionPnlInStock">0.00</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">收益合计</span>
+        <span class="stat-value" id="stockTotalPnl">0.00</span>
+      </div>
+    </div>
+
+    <div class="search-box">
+      <input type="text" class="search-input" id="stockSearchInput" placeholder="搜索股票/ETF代码或名称..." oninput="filterStockWatchlist()">
+    </div>
+
+    <div id="stockContainer">
+      <table class="watchlist-table">
+        <thead>
+          <tr>
+            <th>代码</th>
+            <th>名称</th>
+            <th>类型</th>
+            <th>持股数量</th>
+            <th>现价</th>
+            <th>涨跌</th>
+            <th class="sortable" onclick="sortBy('changePercent')">涨跌幅 <span id="sortIcon_changePercent"></span></th>
+            <th>当日收益</th>
+            <th class="sortable" onclick="sortBy('mainFlow')">资金流入 <span id="sortIcon_mainFlow"></span></th>
+            <th>资金流出</th>
+            <th>净流入</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="stockWatchlistBody">
+        </tbody>
+      </table>
+      <div class="empty-state" id="stockEmptyState" style="display: none;">
+        <h3>暂无自选股</h3>
+        <p>点击"+ 添加"按钮开始添加股票或ETF</p>
+      </div>
+    </div>
+
+    <div style="padding: 12px 24px;">
+      <button class="btn btn-primary" onclick="showAddStockModal()">+ 添加股票/ETF</button>
+    </div>
+  </div>
+
+  <!-- 期权模块 -->
+  <div class="module-content" id="optionModule">
+    <div class="stats" id="optionStats">
+      <div class="stat-item">
+        <span class="stat-label">总数</span>
+        <span class="stat-value" id="optionCount">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">买方</span>
+        <span class="stat-value positive" id="optionBuyCount">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">卖方</span>
+        <span class="stat-value negative" id="optionSellCount">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">收益合计</span>
+        <span class="stat-value" id="optionTotalPnl">0.00</span>
+      </div>
+    </div>
+
+    <div class="search-box">
+      <input type="text" class="search-input" id="optionSearchInput" placeholder="搜索期权代码或名称..." oninput="filterOptionWatchlist()">
+    </div>
+
+    <div id="optionContainer">
+      <table class="watchlist-table">
+        <thead>
+          <tr>
+            <th>代码</th>
+            <th>名称</th>
+            <th>方向</th>
+            <th>持股数量</th>
+            <th>现价</th>
+            <th>涨跌</th>
+            <th>涨跌幅</th>
+            <th>当日收益</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="optionWatchlistBody">
+        </tbody>
+      </table>
+      <div class="empty-state" id="optionEmptyState" style="display: none;">
+        <h3>暂无期权</h3>
+        <p>点击"+ 添加期权"按钮开始添加期权合约</p>
+      </div>
+    </div>
+
+    <div style="padding: 12px 24px;">
+      <button class="btn btn-primary" onclick="showAddOptionModal()">+ 添加期权</button>
+    </div>
+  </div>
+
+  <!-- 总收益合计 -->
+  <div class="stats" style="margin: 16px 24px; background: linear-gradient(135deg, #1a1f2e, #0d1117); border: 1px solid #30363d;">
+    <div class="stat-item">
+      <span class="stat-label">总收益合计（自选股 + 期权）</span>
+      <span class="stat-value" id="grandTotalPnl" style="font-size: 24px;">0.00</span>
+    </div>
+  </div>
+
+  <!-- 添加股票/ETF弹窗 -->
+  <div class="modal" id="addStockModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>添加股票/ETF</h3>
+        <button class="modal-close" onclick="hideAddStockModal()">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>代码</label>
+        <input type="text" id="addStockCode" placeholder="输入6位股票或ETF代码">
+      </div>
+      <div class="form-group">
+        <label>名称（可选）</label>
+        <input type="text" id="addStockName" placeholder="自动获取">
+      </div>
+      <div class="form-group">
+        <label>类型</label>
+        <select id="addStockType">
+          <option value="stock">股票</option>
+          <option value="etf">ETF</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>持股数量</label>
+        <input type="number" id="addStockQuantity" value="0" min="0">
+      </div>
+      <div style="display: flex; gap: 12px; justify-content: flex-end;">
+        <button class="btn" onclick="hideAddStockModal()">取消</button>
+        <button class="btn btn-primary" onclick="addStockWatchlist()">添加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 添加期权弹窗 -->
+  <div class="modal" id="addOptionModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>添加期权</h3>
+        <button class="modal-close" onclick="hideAddOptionModal()">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>代码（8位）</label>
+        <input type="text" id="addOptionCode" placeholder="输入8位期权合约代码">
+      </div>
+      <div class="form-group">
+        <label>名称（可选）</label>
+        <input type="text" id="addOptionName" placeholder="如：50ETF购6月3200">
+      </div>
+      <div class="form-group">
+        <label>方向</label>
+        <select id="addOptionDirection">
+          <option value="1">买（+）</option>
+          <option value="-1">卖（-）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>数量（张）</label>
+        <input type="number" id="addOptionQuantity" value="0" min="0">
+      </div>
+      <div style="display: flex; gap: 12px; justify-content: flex-end;">
+        <button class="btn" onclick="hideAddOptionModal()">取消</button>
+        <button class="btn btn-primary" onclick="addOptionWatchlist()">添加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新建组弹窗 -->
+  <div class="modal" id="addGroupModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>新建自选股组</h3>
+        <button class="modal-close" onclick="hideAddGroupModal()">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>组名</label>
+        <input type="text" id="addGroupName" placeholder="输入组名，如：自选股4">
+      </div>
+      <div style="display: flex; gap: 12px; justify-content: flex-end;">
+        <button class="btn" onclick="hideAddGroupModal()">取消</button>
+        <button class="btn btn-primary" onclick="addGroup()">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 状态变量
+    let stockWatchlistData = [];
+    let optionWatchlistData = [];
+    let groups = [];
+    let currentGroupId = 1;
+    let currentModule = 'stock'; // 'stock' 或 'option'
+    let currentSort = { field: null, order: 'desc' };
+
+    // 格式化数字
+    function formatNumber(num) {
+      if (num === null || num === undefined) return '--';
+      if (Math.abs(num) >= 1e8) return (num / 1e8).toFixed(2) + '亿';
+      if (Math.abs(num) >= 1e4) return (num / 1e4).toFixed(2) + '万';
+      return num.toLocaleString();
+    }
+
+    // 格式化价格（4位小数）
+    function formatPrice(num) {
+      if (num === null || num === undefined) return '--';
+      return num.toFixed(4);
+    }
+
+    // 获取涨跌CSS类
+    function getChangeClass(change) {
+      if (change > 0) return 'positive';
+      if (change < 0) return 'negative';
+      return 'zero';
+    }
+
+    // 获取方向文本
+    function getDirectionText(direction) {
+      return direction > 0 ? '<span class="positive">买</span>' : '<span class="negative">卖</span>';
+    }
+
+    // 格式化资金流
+    function formatFlow(num) {
+      if (num === null || num === undefined) return '--';
+      if (Math.abs(num) >= 1e8) return (num / 1e8).toFixed(2) + '亿';
+      if (Math.abs(num) >= 1e4) return (num / 1e4).toFixed(2) + '万';
+      return num.toFixed(2);
+    }
+
+    // 获取资金流CSS类
+    function getFlowClass(num) {
+      if (num > 0) return 'positive';
+      if (num < 0) return 'negative';
+      return 'zero';
+    }
+
+    // 获取类型标签
+    function getTypeTag(type) {
+      const tags = {
+        stock: '<span class="type-tag type-stock">股票</span>',
+        etf: '<span class="type-tag type-etf">ETF</span>'
+      };
+      return tags[type] || tags.stock;
+    }
+
+    // 切换模块
+    function switchModule(module) {
+      currentModule = module;
+
+      // 更新标签样式
+      document.querySelectorAll('.module-tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      if (module === 'stock') {
+        document.querySelector('.module-tab:first-child').classList.add('active');
+      } else {
+        document.querySelector('.module-tab.option-tab').classList.add('active');
+      }
+
+      // 显示/隐藏模块内容
+      document.getElementById('stockModule').classList.toggle('active', module === 'stock');
+      document.getElementById('optionModule').classList.toggle('active', module === 'option');
+
+      // 加载对应模块数据
+      if (module === 'stock') {
+        loadStockWatchlist();
+      } else {
+        loadOptionWatchlist();
+      }
+    }
+
+    // 刷新所有数据
+    async function refreshAll() {
+      await Promise.all([loadGroups(), loadStockWatchlist(), loadOptionWatchlist()]);
+      updateGrandTotalPnl();
+    }
+
+    // 加载自选股组
+    async function loadGroups() {
+      try {
+        const response = await fetch('/api/watchlist/groups', {
+          credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.groups) {
+          groups = data.groups.filter(g => g.id !== 99); // 排除期权组
+          renderGroupTabs();
+        }
+      } catch (error) {
+        console.error('加载自选股组失败:', error);
+      }
+    }
+
+    // 渲染自选股组标签
+    function renderGroupTabs() {
+      const container = document.getElementById('groupTabs');
+      container.innerHTML = groups.map(group => `
+        <div class="group-tab ${group.id === currentGroupId ? 'active' : ''}"
+             onclick="switchGroup(${group.id})">
+          ${group.name}
+          ${group.id !== 1 ? `<span class="delete-btn" onclick="event.stopPropagation(); deleteGroup(${group.id})">✕</span>` : ''}
+        </div>
+      `).join('');
+    }
+
+    // 切换自选股组
+    function switchGroup(groupId) {
+      currentGroupId = groupId;
+      renderGroupTabs();
+      loadStockWatchlist();
+    }
+
+    // 显示/隐藏弹窗
+    function showAddStockModal() {
+      document.getElementById('addStockModal').classList.add('active');
+      document.getElementById('addStockCode').focus();
+    }
+
+    function hideAddStockModal() {
+      document.getElementById('addStockModal').classList.remove('active');
+      document.getElementById('addStockCode').value = '';
+      document.getElementById('addStockName').value = '';
+      document.getElementById('addStockType').value = 'stock';
+      document.getElementById('addStockQuantity').value = '0';
+    }
+
+    function showAddOptionModal() {
+      document.getElementById('addOptionModal').classList.add('active');
+      document.getElementById('addOptionCode').focus();
+    }
+
+    function hideAddOptionModal() {
+      document.getElementById('addOptionModal').classList.remove('active');
+      document.getElementById('addOptionCode').value = '';
+      document.getElementById('addOptionName').value = '';
+      document.getElementById('addOptionDirection').value = '1';
+      document.getElementById('addOptionQuantity').value = '0';
+    }
+
+    function showAddGroupModal() {
+      document.getElementById('addGroupModal').classList.add('active');
+      document.getElementById('addGroupName').focus();
+    }
+
+    function hideAddGroupModal() {
+      document.getElementById('addGroupModal').classList.remove('active');
+      document.getElementById('addGroupName').value = '';
+    }
+
+    // 创建自选股组
+    async function addGroup() {
+      const name = document.getElementById('addGroupName').value.trim();
+      if (!name) {
+        alert('请输入组名');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/watchlist/groups', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ name })
+        });
+        const data = await response.json();
+        if (data.success) {
+          hideAddGroupModal();
+          loadGroups();
+        }
+      } catch (error) {
+        alert('创建失败: ' + error.message);
+      }
+    }
+
+    // 删除自选股组
+    async function deleteGroup(groupId) {
+      if (!confirm('确定删除此组吗？组内所有自选股将被删除。')) return;
+
+      try {
+        const response = await fetch(`/api/watchlist/groups/${groupId}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.success) {
+          if (currentGroupId === groupId) {
+            currentGroupId = 1;
+          }
+          loadGroups();
+          loadStockWatchlist();
+        }
+      } catch (error) {
+        alert('删除失败: ' + error.message);
+      }
+    }
+
+    // 添加股票/ETF
+    async function addStockWatchlist() {
+      const code = document.getElementById('addStockCode').value.trim();
+      const name = document.getElementById('addStockName').value.trim();
+      const type = document.getElementById('addStockType').value;
+      const quantity = parseInt(document.getElementById('addStockQuantity').value) || 0;
+
+      if (!code) {
+        alert('请输入代码');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/watchlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ code, name, type, quantity, direction: 1, group_id: currentGroupId })
+        });
+        const data = await response.json();
+        if (data.success) {
+          hideAddStockModal();
+          loadStockWatchlist();
+        } else {
+          alert(data.error || '添加失败');
+        }
+      } catch (error) {
+        alert('添加失败: ' + error.message);
+      }
+    }
+
+    // 添加期权
+    async function addOptionWatchlist() {
+      const code = document.getElementById('addOptionCode').value.trim();
+      const name = document.getElementById('addOptionName').value.trim();
+      const direction = parseInt(document.getElementById('addOptionDirection').value) || 1;
+      const quantity = parseInt(document.getElementById('addOptionQuantity').value) || 0;
+
+      if (!code) {
+        alert('请输入期权代码');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/watchlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ code, name, type: 'option', quantity, direction, group_id: 99 })
+        });
+        const data = await response.json();
+        if (data.success) {
+          hideAddOptionModal();
+          loadOptionWatchlist();
+        } else {
+          alert(data.error || '添加失败');
+        }
+      } catch (error) {
+        alert('添加失败: ' + error.message);
+      }
+    }
+
+    // 加载股票/ETF自选股
+    async function loadStockWatchlist() {
+      try {
+        const response = await fetch(`/api/watchlist?group_id=${currentGroupId}`, {
+          credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.items) {
+          stockWatchlistData = data.items.filter(item => item.type !== 'option');
+
+          // 获取资金流数据
+          const codes = stockWatchlistData.map(item => item.code).join(',');
+          if (codes) {
+            try {
+              const flowResponse = await fetch(`/api/fundflow/batch?codes=${codes}`, {
+                credentials: 'include'
+              });
+              const flowData = await flowResponse.json();
+              if (flowData.items) {
+                const flowMap = {};
+                flowData.items.forEach(f => {
+                  flowMap[f.code] = f;
+                });
+                stockWatchlistData = stockWatchlistData.map(item => ({
+                  ...item,
+                  mainFlow: flowMap[item.code]?.mainFlow || 0,
+                  retailFlow: flowMap[item.code]?.retailFlow || 0,
+                  netFlow: flowMap[item.code]?.netFlow || 0,
+                }));
+              }
+            } catch (e) {
+              console.error('获取资金流失败:', e);
+            }
+          }
+
+          // 应用当前排序
+          sortStockData();
+        }
+      } catch (error) {
+        console.error('加载自选股失败:', error);
+      }
+
+      // 同步加载期权收益数据（用于股票模块的收益合计）
+      try {
+        const optResp = await fetch('/api/watchlist?group_id=99', { credentials: 'include' });
+        const optData = await optResp.json();
+        if (optData.items) optionWatchlistData = optData.items;
+      } catch (e) {}
+
+      // 更新统计（含期权收益）
+      updateStockStats();
+      updateGrandTotalPnl();
+    }
+
+    // 加载期权
+    async function loadOptionWatchlist() {
+      try {
+        const response = await fetch('/api/watchlist?group_id=99', {
+          credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.items) {
+          optionWatchlistData = data.items;
+          renderOptionWatchlist(optionWatchlistData);
+          updateOptionStats();
+          updateGrandTotalPnl();
+        }
+      } catch (error) {
+        console.error('加载期权失败:', error);
+      }
+    }
+
+    // 渲染股票/ETF列表
+    function renderStockWatchlist(items) {
+      const tbody = document.getElementById('stockWatchlistBody');
+      const emptyState = document.getElementById('stockEmptyState');
+
+      if (!items || items.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.style.display = 'block';
+        document.querySelector('#stockContainer .watchlist-table').style.display = 'none';
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      document.querySelector('#stockContainer .watchlist-table').style.display = 'table';
+
+      tbody.innerHTML = items.map(item => {
+        const changeClass = getChangeClass(item.change);
+        const changePercentClass = getChangeClass(item.changePercent);
+        const dailyPnlClass = getChangeClass(item.dailyPnl);
+        const mainFlowClass = getFlowClass(item.mainFlow);
+        const retailFlowClass = getFlowClass(item.retailFlow);
+        const netFlowClass = getFlowClass(item.netFlow);
+        return `
+          <tr>
+            <td class="code">${item.code}</td>
+            <td class="name">${item.name || '--'}</td>
+            <td>${getTypeTag(item.type)}</td>
+            <td>
+              <input type="number" class="qty-input" value="${item.quantity || 0}"
+                     onchange="updateStockQuantity('${item.code}', this.value)">
+            </td>
+            <td class="price ${changeClass}">${formatPrice(item.price)}</td>
+            <td class="change ${changeClass}">${item.change ? (item.change > 0 ? '+' : '') + item.change.toFixed(4) : '--'}</td>
+            <td class="change ${changePercentClass}">${item.changePercent ? (item.changePercent > 0 ? '+' : '') + item.changePercent.toFixed(2) + '%' : '--'}</td>
+            <td class="change ${dailyPnlClass}">${item.dailyPnl ? (item.dailyPnl > 0 ? '+' : '') + item.dailyPnl.toFixed(2) : '0.00'}</td>
+            <td class="${mainFlowClass}">${formatFlow(item.mainFlow)}</td>
+            <td class="${retailFlowClass}">${formatFlow(item.retailFlow)}</td>
+            <td class="${netFlowClass}">${formatFlow(item.netFlow)}</td>
+            <td class="actions">
+              <button class="btn btn-sm btn-danger" onclick="removeStockWatchlist('${item.code}')">删除</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // 渲染期权列表
+    function renderOptionWatchlist(items) {
+      const tbody = document.getElementById('optionWatchlistBody');
+      const emptyState = document.getElementById('optionEmptyState');
+
+      if (!items || items.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.style.display = 'block';
+        document.querySelector('#optionContainer .watchlist-table').style.display = 'none';
+        return;
+      }
+
+      emptyState.style.display = 'none';
+      document.querySelector('#optionContainer .watchlist-table').style.display = 'table';
+
+      tbody.innerHTML = items.map(item => {
+        const changeClass = getChangeClass(item.change);
+        const changePercentClass = getChangeClass(item.changePercent);
+        const dailyPnlClass = getChangeClass(item.dailyPnl);
+        const directionClass = item.direction > 0 ? 'positive' : 'negative';
+        return `
+          <tr>
+            <td class="code">${item.code}</td>
+            <td class="name">${item.name || '--'}</td>
+            <td class="${directionClass}">${getDirectionText(item.direction)}</td>
+            <td>
+              <input type="number" class="qty-input" value="${item.quantity || 0}"
+                     onchange="updateOptionQuantity('${item.code}', this.value)">
+            </td>
+            <td class="price ${changeClass}">${formatPrice(item.price)}</td>
+            <td class="change ${changeClass}">${item.change ? (item.change > 0 ? '+' : '') + item.change.toFixed(4) : '--'}</td>
+            <td class="change ${changePercentClass}">${item.changePercent ? (item.changePercent > 0 ? '+' : '') + item.changePercent.toFixed(2) + '%' : '--'}</td>
+            <td class="change ${dailyPnlClass}">${item.dailyPnl ? (item.dailyPnl > 0 ? '+' : '') + item.dailyPnl.toFixed(2) : '0.00'}</td>
+            <td class="actions">
+              <button class="btn btn-sm" onclick="toggleOptionDirection('${item.code}', ${item.direction})">${item.direction > 0 ? '买' : '卖'}</button>
+              <button class="btn btn-sm btn-danger" onclick="removeOptionWatchlist('${item.code}')">删除</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // 更新股票/ETF统计
+    function updateStockStats() {
+      document.getElementById('stockCount').textContent = stockWatchlistData.length;
+      document.getElementById('stockUpCount').textContent = stockWatchlistData.filter(i => i.change > 0).length;
+      document.getElementById('stockDownCount').textContent = stockWatchlistData.filter(i => i.change < 0).length;
+
+      // 当前分组的股票收益（不含期权）
+      const stockPnl = stockWatchlistData.reduce((sum, item) => sum + (item.dailyPnl || 0), 0);
+      const stockPnlEl = document.getElementById('stockPnl');
+      stockPnlEl.textContent = (stockPnl > 0 ? '+' : '') + stockPnl.toFixed(2);
+      stockPnlEl.className = 'stat-value ' + getChangeClass(stockPnl);
+
+      // 期权收益（独立计算）
+      const optionPnl = optionWatchlistData.reduce((sum, item) => sum + (item.dailyPnl || 0), 0);
+      const optEl = document.getElementById('optionPnlInStock');
+      optEl.textContent = (optionPnl > 0 ? '+' : '') + optionPnl.toFixed(2);
+      optEl.className = 'stat-value ' + getChangeClass(optionPnl);
+
+      // 分组收益合计 = 当前分组股票收益 + 期权收益
+      const totalPnl = stockPnl + optionPnl;
+      const totalEl = document.getElementById('stockTotalPnl');
+      totalEl.textContent = (totalPnl > 0 ? '+' : '') + totalPnl.toFixed(2);
+      totalEl.className = 'stat-value ' + getChangeClass(totalPnl);
+    }
+
+    // 更新期权统计
+    function updateOptionStats() {
+      document.getElementById('optionCount').textContent = optionWatchlistData.length;
+      document.getElementById('optionBuyCount').textContent = optionWatchlistData.filter(i => i.direction > 0).length;
+      document.getElementById('optionSellCount').textContent = optionWatchlistData.filter(i => i.direction < 0).length;
+
+      const optionPnl = optionWatchlistData.reduce((sum, item) => sum + (item.dailyPnl || 0), 0);
+      const optionPnlElement = document.getElementById('optionTotalPnl');
+      optionPnlElement.textContent = (optionPnl > 0 ? '+' : '') + optionPnl.toFixed(2);
+      optionPnlElement.className = 'stat-value ' + getChangeClass(optionPnl);
+    }
+
+    // 更新总收益合计
+    function updateGrandTotalPnl() {
+      const stockPnl = stockWatchlistData.reduce((sum, item) => sum + (item.dailyPnl || 0), 0);
+      const optionPnl = optionWatchlistData.reduce((sum, item) => sum + (item.dailyPnl || 0), 0);
+      const grandTotal = stockPnl + optionPnl;
+
+      const grandTotalElement = document.getElementById('grandTotalPnl');
+      grandTotalElement.textContent = (grandTotal > 0 ? '+' : '') + grandTotal.toFixed(2);
+      grandTotalElement.className = 'stat-value ' + getChangeClass(grandTotal);
+    }
+
+    // 排序功能
+    function sortBy(field) {
+      if (currentSort.field === field) {
+        currentSort.order = currentSort.order === 'desc' ? 'asc' : 'desc';
+      } else {
+        currentSort.field = field;
+        currentSort.order = 'desc';
+      }
+
+      updateSortIcons();
+      sortStockData();
+    }
+
+    function updateSortIcons() {
+      document.querySelectorAll('.sortable span').forEach(span => {
+        span.textContent = '';
+      });
+
+      if (currentSort.field) {
+        const icon = document.getElementById(`sortIcon_${currentSort.field}`);
+        if (icon) {
+          icon.textContent = currentSort.order === 'desc' ? '↓' : '↑';
+        }
+      }
+    }
+
+    function sortStockData() {
+      if (!currentSort.field || !stockWatchlistData.length) {
+        renderStockWatchlist(stockWatchlistData);
+        return;
+      }
+
+      stockWatchlistData.sort((a, b) => {
+        const aVal = a[currentSort.field] || 0;
+        const bVal = b[currentSort.field] || 0;
+        return currentSort.order === 'desc' ? bVal - aVal : aVal - bVal;
+      });
+
+      renderStockWatchlist(stockWatchlistData);
+    }
+
+    // 过滤功能
+    function filterStockWatchlist() {
+      const keyword = document.getElementById('stockSearchInput').value.toLowerCase();
+      const filtered = stockWatchlistData.filter(item =>
+        (item.code && item.code.toLowerCase().includes(keyword)) ||
+        (item.name && item.name.toLowerCase().includes(keyword))
+      );
+      renderStockWatchlist(filtered);
+    }
+
+    function filterOptionWatchlist() {
+      const keyword = document.getElementById('optionSearchInput').value.toLowerCase();
+      const filtered = optionWatchlistData.filter(item =>
+        (item.code && item.code.toLowerCase().includes(keyword)) ||
+        (item.name && item.name.toLowerCase().includes(keyword))
+      );
+      renderOptionWatchlist(filtered);
+    }
+
+    // 更新数量
+    async function updateStockQuantity(code, quantity) {
+      try {
+        const response = await fetch(`/api/watchlist/${code}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ quantity: parseInt(quantity) || 0 })
+        });
+        const data = await response.json();
+        if (data.success) {
+          loadStockWatchlist();
+          updateGrandTotalPnl();
+        }
+      } catch (error) {
+        alert('更新失败: ' + error.message);
+      }
+    }
+
+    async function updateOptionQuantity(code, quantity) {
+      try {
+        const response = await fetch(`/api/watchlist/${code}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ quantity: parseInt(quantity) || 0 })
+        });
+        const data = await response.json();
+        if (data.success) {
+          loadOptionWatchlist();
+        }
+      } catch (error) {
+        alert('更新失败: ' + error.message);
+      }
+    }
+
+    // 切换期权方向
+    async function toggleOptionDirection(code, currentDirection) {
+      const newDirection = currentDirection > 0 ? -1 : 1;
+      try {
+        const response = await fetch(`/api/watchlist/${code}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ direction: newDirection })
+        });
+        const data = await response.json();
+        if (data.success) {
+          loadOptionWatchlist();
+        }
+      } catch (error) {
+        alert('更新失败: ' + error.message);
+      }
+    }
+
+    // 删除
+    async function removeStockWatchlist(code) {
+      if (!confirm(`确定删除 ${code} 吗？`)) return;
+
+      try {
+        const response = await fetch(`/api/watchlist/${code}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.success) {
+          loadStockWatchlist();
+          updateGrandTotalPnl();
+        }
+      } catch (error) {
+        alert('删除失败: ' + error.message);
+      }
+    }
+
+    async function removeOptionWatchlist(code) {
+      if (!confirm(`确定删除 ${code} 吗？`)) return;
+
+      try {
+        const response = await fetch(`/api/watchlist/${code}`, {
+          method: 'DELETE',
+          credentials: 'include'
+        });
+        const data = await response.json();
+        if (data.success) {
+          loadOptionWatchlist();
+        }
+      } catch (error) {
+        alert('删除失败: ' + error.message);
+      }
+    }
+
+    // 检查登录状态
+    async function checkAuth() {
+      try {
+        const response = await fetch('/api/auth/status', { credentials: 'include' });
+        const data = await response.json();
+        if (!data.authenticated) {
+          const password = prompt('请输入访问密码:');
+          if (password) {
+            const loginResponse = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ password })
+            });
+            const loginData = await loginResponse.json();
+            if (loginData.success) {
+              refreshAll();
+            } else {
+              alert('密码错误');
+            }
+          }
+        } else {
+          refreshAll();
+        }
+      } catch (error) {
+        console.error('检查登录状态失败:', error);
+      }
+    }
+
+    // 页面加载完成后执行
+    document.addEventListener('DOMContentLoaded', checkAuth);
+
+    // 回车添加
+    document.getElementById('addStockCode').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addStockWatchlist();
+    });
+    document.getElementById('addOptionCode').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addOptionWatchlist();
+    });
+
+	  </script>
+	</body>
+	</html>

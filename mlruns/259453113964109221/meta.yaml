@@ -1,0 +1,8 @@
+artifact_location: file:C:\Users\lb\stock-quant\mlruns/259453113964109221
+creation_time: 1779750688737
+experiment_id: '259453113964109221'
+last_update_time: 1779750688737
+lifecycle_stage: active
+name: qlib_baseline_v2
+trace_location: null
+workspace: default

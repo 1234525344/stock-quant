@@ -1,5 +1,6 @@
 // 大盘指数数据 — 新浪/腾讯接口
-const axios = require("axios");
+// v2: 使用连接池 apiClient 复用 TCP 连接, 降低延迟
+const { apiClient } = require("./data");
 const iconv = require("iconv-lite");
 
 // 主要指数列表
@@ -33,7 +34,7 @@ async function getIndexQuotes() {
   const symbols = INDEX_LIST.map(i => i.symbol).join(",");
   const url = `https://hq.sinajs.cn/list=${symbols}`;
   try {
-    const resp = await axios.get(url, {
+    const resp = await apiClient.get(url, {
       timeout: 10000,
       responseType: "arraybuffer",
       headers: { Referer: "https://finance.sina.com.cn" },
@@ -84,7 +85,7 @@ async function getIndexKline(code, days = 365) {
     ? "sh" + code : "sz" + code;
   const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${tkPrefix},day,,,${days},qfq`;
   try {
-    const { data } = await axios.get(url, {
+    const { data } = await apiClient.get(url, {
       timeout: 10000,
       headers: { Referer: "https://gu.qq.com" },
     });
@@ -103,9 +104,9 @@ async function getMarketBreadth() {
   try {
     // 上证涨跌家数
     const url = "https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids=1.000001,0.399001,0.399006,1.000688&fields=f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f14,f15,f16,f17,f18,f20,f21,f104,f105,f106,f107,f108,f152";
-    const { data } = await axios.get(url, { timeout: 8000 });
+    const { data } = await apiClient.get(url, { timeout: 8000 });
     // 使用东方财富的涨跌统计接口
-    const resp2 = await axios.get("https://push2.eastmoney.com/api/qt/stock/get?secid=1.000001&fields=f47,f48,f50,f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f170,f171,f172,f173,f174,f175,f176,f177,f178,f179", { timeout: 8000 });
+    const resp2 = await apiClient.get("https://push2.eastmoney.com/api/qt/stock/get?secid=1.000001&fields=f47,f48,f50,f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f170,f171,f172,f173,f174,f175,f176,f177,f178,f179", { timeout: 8000 });
     return {
       updateTime: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
     };
@@ -119,7 +120,7 @@ async function getSectorPerformance() {
   try {
     // 东方财富行业板块行情
     const url = "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=30&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:2&fields=f2,f3,f4,f5,f6,f7,f8,f10,f12,f14,f15,f16,f17,f18,f20,f21";
-    const { data } = await axios.get(url, { timeout: 8000 });
+    const { data } = await apiClient.get(url, { timeout: 8000 });
     if (!data?.data?.diff) return [];
     return data.data.diff.map(d => ({
       code: d.f12,
@@ -137,7 +138,7 @@ async function getSectorPerformance() {
       // Simplified format: name, preClose, changeAmt, changePct, volume, amount
       const sinaSymbols = SECTOR_LIST.map(s => s.prefix + s.symbol.slice(2)).join(",");
       const url = `https://hq.sinajs.cn/list=${sinaSymbols}`;
-      const resp = await axios.get(url, {
+      const resp = await apiClient.get(url, {
         timeout: 10000,
         responseType: "arraybuffer",
         headers: { Referer: "https://finance.sina.com.cn" },
@@ -176,28 +177,65 @@ async function getSectorPerformance() {
   }
 }
 
-// 获取板块资金流向 (从东方财富网页抓取 + Sina/Tencent补充)
+// 解析东方财富 clist API 响应 (兼容 JSON 和 JSONP)
+function _parseEastMoneyResponse(data) {
+  const raw = typeof data === "string" ? data.replace(/^jQuery\d+_\d+\(/, "").replace(/\);?$/, "") : data;
+  return typeof raw === "string" ? JSON.parse(raw) : raw;
+}
+
+// 获取板块资金流向 (东方财富 push2 API, 分页获取全部板块)
 async function getSectorFlow() {
+  const https = require("https");
   try {
-    // 方案1: 直接从东方财富数据页获取JSON
-    const timestamp = Date.now();
-    const url = `https://push2.eastmoney.com/api/qt/clist/get?cb=jQuery_${timestamp}&pn=1&pz=40&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f62&fs=m:90+t:2&fields=f2,f3,f4,f12,f14,f62,f66,f69,f72,f75,f184,f124,f204,f205&_=${timestamp}`;
-    const { data } = await axios.get(url, {
-      timeout: 10000,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": "https://data.eastmoney.com/bkzj/hy.html",
-        "Accept": "*/*",
-      },
+    const baseUrl = `push2.eastmoney.com/api/qt/clist/get?np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f62&fs=m:90+t:2&fields=f2,f3,f4,f12,f14,f62,f66,f69,f72,f75,f184,f124`;
+    const headers = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      "Referer": "https://data.eastmoney.com/bkzj/hy.html",
+    };
+
+    // 封装HTTPS请求
+    const httpsGet = (path) => new Promise((resolve, reject) => {
+      https.get(`https://${path}`, { headers, timeout: 10000 }, (res) => {
+        let body = "";
+        res.on("data", (c) => body += c);
+        res.on("end", () => {
+          try { resolve(JSON.parse(body)); }
+          catch (e) { reject(new Error("JSON parse failed")); }
+        });
+      }).on("error", reject).on("timeout", function() { this.destroy(); reject(new Error("timeout")); });
     });
-    // Parse JSONP
-    const jsonStr = data.replace(/^jQuery\d+_\d+\(/, "").replace(/\);?$/, "");
-    const obj = JSON.parse(jsonStr);
-    if (!obj?.data?.diff) {
-      // Fallback: scrape web
-      return await getSectorFlowWebScrape();
+
+    // 第1页: 获取总数
+    const firstObj = await httpsGet(`${baseUrl}&pn=1&pz=100&po=1`);
+    if (!firstObj?.data?.diff) return await getSectorFlowFallback();
+
+    const total = firstObj.data.total || 0;
+    let allItems = [...firstObj.data.diff];
+
+    // 如果超过100个, 并行分批获取 (concurrency=3, 避免限流)
+    if (total > 100) {
+      const pages = Math.ceil(total / 100);
+      const concurrency = 3;
+      for (let start = 2; start <= pages; start += concurrency) {
+        const batch = [];
+        for (let pn = start; pn < start + concurrency && pn <= pages; pn++) {
+          batch.push(pn);
+        }
+        const results = await Promise.allSettled(
+          batch.map(pn => httpsGet(`${baseUrl}&pn=${pn}&pz=100&po=1`))
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value?.data?.diff) {
+            allItems.push(...r.value.data.diff);
+          }
+        }
+        if (start + concurrency <= pages) {
+          await new Promise(r => setTimeout(r, 200)); // 批次间减速
+        }
+      }
     }
-    return obj.data.diff.map(d => ({
+
+    return allItems.map(d => ({
       code: d.f12,
       name: d.f14,
       price: d.f2,
@@ -212,33 +250,12 @@ async function getSectorFlow() {
       stockCount: d.f124 || 0,
     })).sort((a, b) => (b.mainNet || 0) - (a.mainNet || 0));
   } catch (e) {
-    return await getSectorFlowWebScrape().catch(() => []);
+    return await getSectorFlowFallback().catch(() => []);
   }
 }
 
-// 网页抓取备选方案
-async function getSectorFlowWebScrape() {
-  try {
-    const { data: html } = await axios.get("https://data.eastmoney.com/bkzj/hy.html", {
-      timeout: 10000,
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
-    });
-    // 尝试从网页提取JSON数据
-    const jsonMatch = html.match(/var\s+day_data\s*=\s*(\[[\s\S]*?\]);/);
-    if (jsonMatch) {
-      const data = JSON.parse(jsonMatch[1]);
-      return data.map(d => ({
-        code: d.code || d.f12,
-        name: d.name || d.f14,
-        price: d.f2 || 0,
-        changePct: d.f3 || 0,
-        mainNet: d.f62 || d.mainNet || 0,
-        mainPct: d.f184 || 0,
-      }));
-    }
-  } catch (e) {}
-
-  // 最终降级: 使用Sina行业数据 + 量价估算
+// 快速 fallback: 用板块行情数据估算资金流向 (避免慢速网页抓取)
+async function getSectorFlowFallback() {
   const sectors = await getSectorPerformance();
   if (sectors.length > 0) {
     return sectors.map(s => ({
@@ -246,31 +263,65 @@ async function getSectorFlowWebScrape() {
       name: s.name,
       price: s.price,
       changePct: s.changePct,
-      mainNet: (s.amount || 1) * (s.changePct || 0) / 100 * 0.3 * 10000, // 估算主力净额
+      mainNet: (s.amount || 1) * (s.changePct || 0) / 100 * 0.3 * 10000,
       estimated: true,
     })).sort((a, b) => (b.mainNet || 0) - (a.mainNet || 0));
   }
   return [];
 }
 
-// 概念板块资金流向
+// 概念板块资金流向 (分页获取全部)
 async function getConceptFlow() {
+  const https = require("https");
   try {
-    const timestamp = Date.now();
-    const url = `https://push2.eastmoney.com/api/qt/clist/get?cb=jQuery_${timestamp}&pn=1&pz=40&po=1&np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f62&fs=m:90+t:3&fields=f2,f3,f4,f12,f14,f62,f66,f69,f184&_=${timestamp}`;
-    const { data } = await axios.get(url, {
-      timeout: 8000,
-      headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://data.eastmoney.com/bkzj/gn.html" },
+    const baseUrl = `push2.eastmoney.com/api/qt/clist/get?np=1&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&invt=2&fid=f62&fs=m:90+t:3&fields=f2,f3,f4,f12,f14,f62,f66,f69,f184`;
+    const headers = { "User-Agent": "Mozilla/5.0", "Referer": "https://data.eastmoney.com/bkzj/gn.html" };
+
+    const httpsGet = (path) => new Promise((resolve, reject) => {
+      https.get(`https://${path}`, { headers, timeout: 10000 }, (res) => {
+        let body = "";
+        res.on("data", (c) => body += c);
+        res.on("end", () => {
+          try { resolve(JSON.parse(body)); }
+          catch (e) { reject(new Error("JSON parse failed")); }
+        });
+      }).on("error", reject).on("timeout", function() { this.destroy(); reject(new Error("timeout")); });
     });
-    const jsonStr = data.replace(/^jQuery\d+_\d+\(/, "").replace(/\);?$/, "");
-    const obj = JSON.parse(jsonStr);
-    if (!obj?.data?.diff) return [];
-    return obj.data.diff.map(d => ({
+
+    const firstObj = await httpsGet(`${baseUrl}&pn=1&pz=100&po=1`);
+    if (!firstObj?.data?.diff) return [];
+
+    const total = firstObj.data.total || 0;
+    let allItems = [...firstObj.data.diff];
+
+    if (total > 100) {
+      const pages = Math.ceil(total / 100);
+      const concurrency = 3;
+      for (let start = 2; start <= pages; start += concurrency) {
+        const batch = [];
+        for (let pn = start; pn < start + concurrency && pn <= pages; pn++) {
+          batch.push(pn);
+        }
+        const results = await Promise.allSettled(
+          batch.map(pn => httpsGet(`${baseUrl}&pn=${pn}&pz=100&po=1`))
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value?.data?.diff) {
+            allItems.push(...r.value.data.diff);
+          }
+        }
+        if (start + concurrency <= pages) {
+          await new Promise(r => setTimeout(r, 200));
+        }
+      }
+    }
+
+    return allItems.map(d => ({
       code: d.f12, name: d.f14, price: d.f2, changePct: d.f3,
       mainNet: d.f62 || 0, hugeNet: d.f66 || 0, largeNet: d.f69 || 0, mainPct: d.f184 || 0,
     })).sort((a, b) => (b.mainNet || 0) - (a.mainNet || 0));
   } catch (e) {
-    // Fallback: use sector performance data as concept proxy
+    // Fallback: 用板块行情数据估算
     try {
       const sectors = await getSectorPerformance();
       if (sectors.length > 0) {
@@ -290,7 +341,7 @@ async function getStockComments(code) {
   const prefix = code.startsWith("6") ? "sh" : "sz";
   const url = `https://finance.sina.com.cn/realstock/company/${prefix}${code}/nc.shtml`;
   try {
-    const resp = await axios.get(url, {
+    const resp = await apiClient.get(url, {
       timeout: 10000,
       responseType: "arraybuffer",
       headers: { "User-Agent": "Mozilla/5.0", Referer: "https://finance.sina.com.cn" },

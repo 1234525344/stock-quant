@@ -4,7 +4,6 @@ const { getKlineData, getIntradayTrend, getRealtimeQuotes, getStockName, getFund
 const { calcDailyFundFlow, MFI, CMF } = require("../fundflow");
 const { comprehensiveFlowReport } = require("../quantflow");
 const { getSectorFlow, getConceptFlow } = require("../index");
-const { quoteCache } = require("../state");
 
 const router = require("express").Router();
 
@@ -96,10 +95,10 @@ router.get("/api/fundflow/rtchart", asyncHandler(async (req, res) => {
     });
 }));
 
-router.get("/api/fundflow/minute", asyncHandler(async (req, res) => {
+// 日级资金流向 (K线量价估算, 仅提供最近几天的数据概览)
+router.get("/api/fundflow/daily-estimate", asyncHandler(async (req, res) => {
     const { code } = req.query;
     if (!code) return res.status(400).json({ error: "需要股票代码" });
-    // 取最近5天日K + 实时行情
     const klines = await getKlineData(code, 5);
     if (klines.length < 1) return res.json({ error: "数据不足" });
     const flowData = calcDailyFundFlow(klines);
@@ -115,7 +114,7 @@ router.get("/api/fundflow/minute", asyncHandler(async (req, res) => {
       largePct: latest.largePct, hugePct: latest.hugePct,
       price: quote[0]?.price, change: quote[0]?.change,
       totalAmount: latest.totalAmount,
-      trend: flowData, // 用日数据近似分时趋势
+      trend: flowData,
     });
 }));
 
@@ -287,6 +286,41 @@ router.get("/api/fundflow/live", asyncHandler(async (req, res) => {
       minTrend: minTrend.slice(-60),
       dailyFlow: dailyFlow,
     });
+}));
+
+// 批量获取资金流数据（用于自选股）
+router.get("/api/fundflow/batch", asyncHandler(async (req, res) => {
+    const { codes } = req.query;
+    if (!codes) return res.status(400).json({ error: "需要codes参数" });
+
+    const codeList = codes.split(",").slice(0, 50); // 最多50个
+    const items = [];
+
+    for (const code of codeList) {
+      try {
+        const [realDailyFlow, quote] = await Promise.all([
+          getFundFlow(code, 5).catch(() => []),
+          getRealtimeQuotes([code]).catch(() => []),
+        ]);
+
+        const q = quote[0] || {};
+        const latestFlow = realDailyFlow && realDailyFlow.length > 0
+          ? realDailyFlow[realDailyFlow.length - 1]
+          : {};
+
+        items.push({
+          code,
+          name: q.name || code,
+          mainFlow: latestFlow.main || latestFlow.mainForce || 0,
+          retailFlow: latestFlow.retail || latestFlow.smallOrder || 0,
+          netFlow: (latestFlow.main || latestFlow.mainForce || 0) + (latestFlow.retail || latestFlow.smallOrder || 0),
+        });
+      } catch (e) {
+        items.push({ code, mainFlow: 0, retailFlow: 0, netFlow: 0 });
+      }
+    }
+
+    res.json({ items });
 }));
 
 module.exports = router;

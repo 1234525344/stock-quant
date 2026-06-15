@@ -21,9 +21,9 @@ function setCache(key, data, ttl) {
 
 // ── Provider config ───────────────────────────────
 const PROVIDERS = {
-  aihubmix:  { baseURL: "https://api.aihubmix.com/v1", models: { flash: "DeepSeek-V3.1-Terminus", pro: "claude-sonnet-4-6" }, keyPrefix: "tp-" },
+  mimo:      { baseURL: "https://api.xiaomimimo.com/v1", models: { flash: "mimo-v2-flash", pro: "mimo-v2-pro" }, keyPrefix: "tp-" },
+  aihubmix:  { baseURL: "https://api.aihubmix.com/v1", models: { flash: "DeepSeek-V3.1-Terminus", pro: "claude-sonnet-4-6" }, keyPrefix: "tp-aihub-" },
   deepseek:  { baseURL: "https://api.deepseek.com/v1", models: { flash: "deepseek-chat", pro: "deepseek-chat" }, keyPrefix: "sk-" },
-  mimo:      { baseURL: "https://api.xiaomimimo.com/v1", models: { flash: "mimo-v2-flash", pro: "mimo-v2-pro" }, keyPrefix: "sk-" },
   anthropic: { baseURL: "https://api.anthropic.com/v1", models: { flash: "claude-haiku-4-5-20251001", pro: "claude-sonnet-4-6" }, keyPrefix: "sk-ant-" },
 };
 
@@ -32,15 +32,15 @@ function detectProvider(apiKey) {
   for (const [name, cfg] of Object.entries(PROVIDERS)) {
     if (apiKey.startsWith(cfg.keyPrefix)) return name;
   }
-  return "deepseek"; // fallback for unknown key formats
+  return "mimo"; // fallback for unknown key formats
 }
 
 // ── API Key ───────────────────────────────────────
 function getApiKey(req) {
   if (req?.headers?.["x-api-key"]) return req.headers["x-api-key"];
+  if (process.env.MIMO_API_KEY) return process.env.MIMO_API_KEY;
   if (process.env.AIHUBMIX_API_KEY) return process.env.AIHUBMIX_API_KEY;
   if (process.env.DEEPSEEK_API_KEY) return process.env.DEEPSEEK_API_KEY;
-  if (process.env.MIMO_API_KEY) return process.env.MIMO_API_KEY;
   if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
   return null;
 }
@@ -52,21 +52,36 @@ function isAiConfigured(req) {
 // ── Client ────────────────────────────────────────
 function createClient(apiKey) {
   const provider = detectProvider(apiKey);
-  const cfg = PROVIDERS[provider] || PROVIDERS.deepseek;
+  const cfg = PROVIDERS[provider] || PROVIDERS.mimo;
   return new OpenAI({ apiKey, baseURL: cfg.baseURL });
 }
 
 function getActiveModels(apiKey) {
   const provider = detectProvider(apiKey);
-  return PROVIDERS[provider]?.models || PROVIDERS.deepseek.models;
+  return PROVIDERS[provider]?.models || PROVIDERS.mimo.models;
 }
 
 // ── Unified chat completion (for server.js inline calls) ─
 async function chatCompletion(apiKey, { model, system, messages, maxTokens = 800 }) {
   const client = createClient(apiKey);
-  const allMessages = [];
-  if (system) allMessages.push({ role: "system", content: system });
-  allMessages.push(...messages);
+  const provider = detectProvider(apiKey);
+
+  let allMessages = [];
+  if (provider === "anthropic" || provider === "aihubmix") {
+    // Anthropic API 不支持 role: "system"，需要把 system 合并到第一条 user 消息
+    if (system && messages.length > 0) {
+      allMessages.push({ role: "user", content: system + "\n\n" + messages[0].content });
+      allMessages.push(...messages.slice(1));
+    } else if (system) {
+      allMessages.push({ role: "user", content: system });
+    } else {
+      allMessages.push(...messages);
+    }
+  } else {
+    // OpenAI/DeepSeek 等支持 role: "system"
+    if (system) allMessages.push({ role: "system", content: system });
+    allMessages.push(...messages);
+  }
 
   const resp = await client.chat.completions.create({
     model,
@@ -164,7 +179,7 @@ async function* streamChat(message, context, apiKey) {
     systemPrompt += `\n\n当前市场背景（供参考，回答时不要逐条复述）：${context.marketContext}`;
   }
 
-  // Prepend system message at the front
+  // 将 system 消息放在 messages 开头
   const allMessages = [
     { role: "system", content: systemPrompt },
     ...messages,

@@ -3,6 +3,7 @@
 // WebSocket per-client订阅 + 自适应轮询 + 请求去重 + 增量指标
 
 const EventEmitter = require("events");
+const { logger } = require("./logger");
 const { IndicatorBuffer } = require("./indicators");
 const { getTDXSnapshot, watchTDXFile, getTDXKline, getTDXRoot, unwatchAll } = require("./tdx-reader");
 const { getTDXTCPClient } = require("./tdx-tcp");
@@ -46,9 +47,9 @@ class RealtimeEngine extends EventEmitter {
 
     this.tdxAvailable = getTDXRoot() !== null;
     if (this.tdxAvailable) {
-      console.log("[实时引擎] 通达信本地数据已启用:", getTDXRoot());
+      logger.info("[实时引擎] 通达信本地数据已启用:", getTDXRoot());
     } else {
-      console.log("[实时引擎] 未检测到通达信, 使用HTTP数据源");
+      logger.info("[实时引擎] 未检测到通达信, 使用HTTP数据源");
     }
 
     this._startAdaptivePolling();
@@ -210,7 +211,7 @@ class RealtimeEngine extends EventEmitter {
 
   async _fetchSinaQuotes(codes) {
     const symbols = codes.map(c =>
-      c.startsWith("6") ? `sh${c}` : `sz${c}`
+      (c.startsWith("5") || c.startsWith("6")) ? `sh${c}` : `sz${c}`
     ).join(",");
 
     try {

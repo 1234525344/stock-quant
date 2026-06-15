@@ -1,0 +1,14 @@
+artifact_uri: file:C:\Users\lb\stock-quant\mlruns/127694301877723077/76af9459b30348b3a1e256ece1127280/artifacts
+end_time: 1779751280382
+entry_point_name: ''
+experiment_id: '127694301877723077'
+lifecycle_stage: active
+run_id: 76af9459b30348b3a1e256ece1127280
+run_name: mlflow_recorder
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1779751275405
+status: 3
+tags: []
+user_id: lb

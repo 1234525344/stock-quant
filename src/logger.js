@@ -16,6 +16,11 @@ class Logger {
     this.currentFile = null;
     this.fileSize = 0;
 
+    // 异步写入缓冲
+    this._writeQueue = [];
+    this._flushTimer = null;
+    this._flushing = false;
+
     if (this.toFile) {
       this._initLogFile();
     }
@@ -81,13 +86,45 @@ class Logger {
     }
 
     if (this.toFile && this.currentFile) {
-      try {
-        this._rotateFile();
-        fs.appendFileSync(this.currentFile, formatted + "\n");
-        this.fileSize += formatted.length + 1;
-      } catch (e) {
-        console.warn("[Logger] 写入日志失败:", e.message);
-      }
+      this._enqueueWrite(formatted);
+    }
+  }
+
+  _enqueueWrite(formatted) {
+    this._rotateFile();
+    this._writeQueue.push(formatted);
+    this.fileSize += formatted.length + 1;
+
+    // 满50条立即刷盘, 否则100ms后批量刷
+    if (this._writeQueue.length >= 50) {
+      clearTimeout(this._flushTimer);
+      this._flushTimer = null;
+      this._flush();
+    } else if (!this._flushTimer && !this._flushing) {
+      this._flushTimer = setTimeout(() => this._flush(), 100);
+    }
+  }
+
+  async _flush() {
+    if (this._flushTimer) { clearTimeout(this._flushTimer); this._flushTimer = null; }
+    if (this._writeQueue.length === 0 || !this.currentFile) return;
+    const batch = this._writeQueue.splice(0).join("\n") + "\n";
+    this._flushing = true;
+    try {
+      await fs.promises.appendFile(this.currentFile, batch, "utf8");
+    } catch (e) {
+      // 降级: 同步写入 (避免丢失关键日志)
+      try { fs.appendFileSync(this.currentFile, batch); } catch (_) {}
+    }
+    this._flushing = false;
+  }
+
+  // 同步刷盘 (SIGINT/exit 时调用)
+  flushSync() {
+    if (this._flushTimer) { clearTimeout(this._flushTimer); this._flushTimer = null; }
+    if (this._writeQueue.length > 0 && this.currentFile) {
+      const batch = this._writeQueue.splice(0).join("\n") + "\n";
+      try { fs.appendFileSync(this.currentFile, batch); } catch (_) {}
     }
   }
 

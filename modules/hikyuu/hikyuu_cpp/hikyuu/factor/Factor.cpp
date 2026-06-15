@@ -1,0 +1,176 @@
+/*
+ *  Copyright (c) 2026 hikyuu.org
+ *
+ *  Created on: 2026-02-12
+ *      Author: fasiondog
+ */
+
+#include "Factor.h"
+#include "hikyuu/plugin/factor.h"
+#include "hikyuu/plugin/device.h"
+#include "hikyuu/StockManager.h"
+#include "hikyuu/indicator/crt/PRICELIST.h"
+#include "hikyuu/indicator/crt/ALIGN.h"
+#include "hikyuu/indicator/imp/IPriceList.h"
+
+namespace hku {
+
+HKU_API std::ostream& operator<<(std::ostream& os, const Factor& factor) {
+    os << factor.str();
+    return os;
+}
+
+string Factor::str() const {
+    std::ostringstream os;
+    string strip("\n");
+    os << "Factor{";
+    os << strip << "name: " << name() << strip << "ktype: " << ktype() << strip
+       << "recover_type: " << KQuery::getRecoverTypeName(recoverType()) << strip
+       << "need_save_value: " << needSaveValue() << strip << "create_at: " << createAt().str()
+       << strip << "update_at: " << updateAt().str() << strip << "formula: " << formula().formula()
+       << strip << "brief: " << brief() << strip << "detail: " << details() << strip
+       << "start_date: " << startDate() << strip << "block: " << block() << "}";
+    return os.str();
+}
+
+Factor::Factor() : m_data(make_shared<Factor::Data>()) {}
+
+Factor::Factor(const string& name, const KQuery::KType& ktype)
+: m_data(make_shared<Data>(name, Indicator(), ktype, "", "", false, Datetime::min(), Block(),
+                           KQuery::RecoverType::NO_RECOVER)) {
+    try {
+        load_from_db();
+    } catch (const std::exception& e) {
+        HKU_ERROR("Failed to load factor from db: {}", e.what());
+    }
+}
+
+Factor::Factor(const string& name, const Indicator& formula, const KQuery::KType& ktype,
+               const string& brief, const string& details, bool need_save_value,
+               const Datetime& start_date, const Block& block, KQuery::RecoverType recover_type)
+: m_data(make_shared<Data>(name, formula, ktype, brief, details, need_save_value, start_date, block,
+                           recover_type)) {
+    // 使用保存因子值时,因子名称必须是英文字母、数字、_ 组成，且首字母不能为数字
+    if (need_save_value && !name.empty()) {
+        HKU_CHECK(isValidFactorName(name), "{}",
+                  htr("When saving factor values, factor names must consist of English letters, "
+                      "numbers and underscores, and cannot start with a number!"));
+    }
+}
+
+void Factor::name(const string& name) {
+    if (m_data->need_save_value && !name.empty()) {
+        HKU_CHECK(isValidFactorName(name), "{}",
+                  htr("When saving factor values, factor names must consist of English letters, "
+                      "numbers and underscores, and cannot start with a number!"));
+    }
+    m_data->name = utf8_to_upper(name);
+    m_data->formula.name(m_data->name);
+}
+
+void Factor::needSaveValue(bool flag) {
+    if (flag && !m_data->name.empty()) {
+        // 保存因子值时,因子名称必须是英文字母、数字、_ 组成，且首字母不能为数字
+        HKU_CHECK(isValidFactorName(m_data->name), "{}",
+                  htr("When saving factor values, factor names must consist of English letters, "
+                      "numbers and underscores, and cannot start with a number!"));
+    }
+    m_data->need_save_value = flag;
+}
+
+Factor::Factor(const Factor& other) noexcept : m_data(other.m_data) {}
+
+Factor::Factor(Factor&& other) noexcept : m_data(std::move(other.m_data)) {}
+
+Factor& Factor::operator=(const Factor& other) noexcept {
+    HKU_IF_RETURN(this == &other, *this);
+    m_data = other.m_data;
+    return *this;
+}
+
+Factor& Factor::operator=(Factor&& other) noexcept {
+    HKU_IF_RETURN(this == &other, *this);
+    m_data = std::move(other.m_data);
+    return *this;
+}
+
+Indicator Factor::getValue(const Stock& stock, const KQuery& query, bool align, bool fill_null,
+                           bool tovalue, bool check, const DatetimeList& align_dates) const {
+    auto inds = getValues({stock}, query, align, fill_null, tovalue, check, align_dates);
+    return inds.empty() ? Indicator() : inds.front();
+}
+
+IndicatorList Factor::getValues(const StockList& stocks, const KQuery& query, bool align,
+                                bool fill_null, bool tovalue, bool check,
+                                const DatetimeList& align_dates) const {
+    if (check) {
+        if (!block().empty()) {
+            for (auto& stock : stocks) {
+                HKU_CHECK(block().have(stock), "Stock not belong to block! {}", stock);
+            }
+        }
+    }
+
+    IndicatorList ret;
+    HKU_IF_RETURN(stocks.empty(), ret);
+
+    const string& driver_type =
+      StockManager::instance().getKDataDriverParameter().get<const string&>("type");
+    if (driver_type == "clickhouse") {
+        ret = hku::getValues(*this, stocks, query, align, fill_null, tovalue, align_dates);
+        return ret;
+    }
+
+    if (align) {
+        DatetimeList dates =
+          align_dates.empty() ? StockManager::instance().getTradingCalendar(query) : align_dates;
+        HKU_IF_RETURN(dates.empty(), ret);
+        auto null_ind = PRICELIST(PriceList(dates.size(), Null<price_t>()), dates);
+        ret = global_parallel_for_index(0, stocks.size(), [&, tovalue, this](size_t i) {
+            Indicator cur_ind;
+            auto k = stocks[i].getKData(query);
+            HKU_IF_RETURN(k.empty(), null_ind);
+            return tovalue ? ALIGN(formula(), dates, fill_null)(k).getResult(0)
+                           : ALIGN(formula(), dates, fill_null)(k);
+        });
+
+    } else {
+        ret = global_parallel_for_index(0, stocks.size(), [&, tovalue, this](size_t i) {
+            auto k = stocks[i].getKData(query);
+            return tovalue ? formula()(k).getResult(0) : formula()(k);
+        });
+    }
+    return ret;
+}
+
+IndicatorList Factor::getAllValues(const KQuery& query, bool align, bool fill_null, bool tovalue,
+                                   const DatetimeList& align_dates) {
+    StockList stocks =
+      block().empty() ? StockManager::instance().getStockList() : block().getStockList();
+    return getValues(stocks, query, align, fill_null, tovalue, false, align_dates);
+}
+
+void Factor::save_to_db(bool update_before) {
+    saveFactor(*this, update_before);
+}
+
+void Factor::save_special_values_to_db(const Stock& stock, const DatetimeList& dates,
+                                       const PriceList& values, bool replace) {
+    saveSpecialFactorValues(*this, stock, dates, values, replace);
+}
+
+void Factor::save_special_values_to_db(const Stock& stock, const Indicator& values, bool replace) {
+    saveSpecialFactorValues(*this, stock, values.getDatetimeList(), values.getResultAsPriceList(0),
+                            replace);
+}
+
+void Factor::remove_from_db() {
+    removeFactor(name(), ktype());
+}
+
+void Factor::load_from_db() {
+    Factor tmp = getFactor(name(), ktype());
+    m_data = std::move(tmp.m_data);
+}
+
+}  // namespace hku

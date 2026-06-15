@@ -2,6 +2,7 @@
 // 整合技术评分、因子分析、资金流向、基本面、行业分析、预测预警，通过AI生成综合推荐
 
 const { screen } = require("./screener");
+const { logger } = require("./logger");
 const { getKlineData, getFundFlow, getStockName, batchWithLimit } = require("./data");
 const { chatCompletion, getActiveModels } = require("./ai-service");
 const { getIndexQuotes } = require("./index");
@@ -186,7 +187,7 @@ const INDUSTRY_MAP = {
   "601318": "保险", "601398": "银行", "601328": "银行", "601998": "银行",
   "000858": "白酒", "002594": "白酒", "600519": "白酒", "601888": "旅游",
   "000063": "通信", "000725": "电子", "300750": "电池", "002415": "电子",
-  "601012": "光伏", "600438:": "光伏", "002459": "光伏", "002466": "光伏",
+  "601012": "光伏", "600438": "光伏", "002459": "光伏", "002466": "光伏",
   "300015": "医疗", "300122": "医疗", "600196": "医药",
   "000333": "家电", "002714": "畜牧", "300433": "纺织",
   "601088": "煤炭", "601899": "黄金", "601225": "有色",
@@ -719,7 +720,7 @@ async function aiPickStocks(query, options = {}) {
   }
 
   // 4. 并行采集所有候选股数据
-  console.log(`[AI选股] 开始扫描 ${stockPool.length} 只股票 + ${etfPool.length} 只ETF...`);
+  logger.info(`[AI选股] 开始扫描 ${stockPool.length} 只股票 + ${etfPool.length} 只ETF...`);
   const candidates = await batchWithLimit([...stockPool, ...etfPool], async (code) => {
     try {
       const [klines, fundFlow, name] = await Promise.all([
@@ -833,7 +834,7 @@ async function aiPickStocks(query, options = {}) {
     });
 
   const topCandidates = valid.slice(0, Math.min(20, valid.length));
-  console.log(`[AI选股] 找到 ${valid.length} 只候选股，取 Top ${topCandidates.length} 送AI分析`);
+  logger.info(`[AI选股] 找到 ${valid.length} 只候选股，取 Top ${topCandidates.length} 送AI分析`);
 
   if (topCandidates.length === 0) {
     return {
@@ -880,7 +881,7 @@ async function aiPickStocks(query, options = {}) {
   const systemPrompt = buildSystemPrompt(strategy);
   const userMessage = buildUserMessage(query, strategy, marketText, aiInput, topN);
 
-  console.log("[AI选股] 调用AI分析...");
+  logger.info("[AI选股] 调用AI分析...");
   const aiResponse = await chatCompletion(apiKey, {
     model: getActiveModels(apiKey).pro,
     maxTokens: 2000,
@@ -898,7 +899,7 @@ async function aiPickStocks(query, options = {}) {
       throw new Error("无法解析AI返回的JSON");
     }
   } catch (e) {
-    console.error("[AI选股] JSON解析失败:", e.message);
+    logger.error("[AI选股] JSON解析失败:", e.message);
     parsed = {
       understanding: query,
       picks: topCandidates.slice(0, topN).map((c, i) => ({

@@ -227,20 +227,15 @@ const FACTOR_DIRECTION = {
   vol20: -1, vol60: -1, downVol: -1,  // lower vol = better risk-adjusted
   size: -1,  // smaller size → lower raw → higher expected return → negate in composite
   volGrowth: 1, priceAccel: 1,
-  amihud: 1,  // higher amihud = more illiquid = higher premium
-  rev5: 1, rev20: 1, divergence: 1,
+  amihud: -1,  // 当前市场偏好流动性好的股票(IC=-0.071)
+  rev5: -1, rev20: 1, divergence: 1,  // rev5 当前市场短期动量主导(IC=-0.063, 反转失效)
 };
 
-// 因子权重 (基于学术文献和经验IC)
+// 因子权重 (GA 精选, 2026-06-06 真实IC数据)
+// volGrowth + amihud + rev5 — composite IC=0.195, stability=1.0, anti_redund=0.76
+// 原 21 因子 composite IC 仅 -0.009 (几乎等于随机)
 const DEFAULT_FACTOR_WEIGHTS = {
-  mom12_1: 0.10, mom6: 0.08, mom3: 0.05, momRiskAdj: 0.07,
-  value52w: 0.10, value60d: 0.08, recovery: 0.0,
-  sharpe: 0.08, stability: 0.05, maxDrawdown: -0.05, ddDuration: -0.03,
-  vol20: -0.08, vol60: -0.05, downVol: -0.07,
-  size: -0.05,
-  volGrowth: 0.04, priceAccel: 0.03,
-  amihud: 0.03,
-  rev5: 0.04, rev20: 0.02, divergence: 0.03,
+  volGrowth: 0.35, amihud: 0.35, rev5: 0.30,
 };
 
 function computeCrossSectionalFactors(allStocksData) {

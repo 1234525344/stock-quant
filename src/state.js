@@ -3,8 +3,6 @@
 
 const path = require("path");
 const { TTLCache } = require("./cache");
-const { createRiskEngine } = require("./risk-control");
-const { PaperTradingManager } = require("./paper-trading");
 
 // ==================== 常量 ====================
 
@@ -63,11 +61,48 @@ const STOCK_POOL = [
   "000977","002456","300450","600406","601360",
 ];
 
+// 市场宽度采样池 (~160只代表股覆盖主要行业)
+const BREADTH_SAMPLE = [
+  // 金融 (银行/证券/保险)
+  "000001","002142","600000","600015","600016","600036","601009","601166","601288","601318",
+  "601328","601398","601628","601688","601818","601939","601988","600030","600837","601211",
+  // 消费 (白酒/食品/家电)
+  "000333","000568","000858","002304","002594","002714","300015","300122","600519","600887",
+  "600809","603288","600690","002007","600132","000651",
+  // 医药
+  "000661","002007","002223","300003","300122","300760","600079","600085","600196","600276",
+  "603259","688180","300450",
+  // 科技/半导体
+  "000063","000725","000977","002049","002156","002185","002230","002371","002415","002436",
+  "002463","002475","300059","300124","300408","600183","600570","600584","600703","603005",
+  "603019","603160","603986","688012","688396","688981",
+  // 新能源
+  "002459","002460","002466","300014","300274","300433","300750","600406","600438","601012",
+  "601615","688005","688599",
+  // 军工
+  "000547","000768","002013","600118","600391","600685","600760","600893","601989",
+  // 周期/资源
+  "000657","000807","000960","600028","600673","601088","601857","601899","603288","603833",
+  // 汽车/制造
+  "000338","000625","002594","002916","600104","600745","601058","601138","601225","601633",
+  // 基建/地产
+  "001979","600048","600383","600585","601668","601800","601390",
+  // 电力/公用
+  "600886","600900","601985",
+  // 农业
+  "000876","002714","300498",
+  // TMT/软件
+  "002236","300474","600536","688111",
+  // 其他行业龙头
+  "000002","002142","002353","300001","600690",
+];
+
 const SCAN_MODES = {
   strong: { label: "找强势股", desc: "MACD金叉+均线多头+量价突破", minScore: 40, sortBy: "score" },
   oversold: { label: "找超跌反弹", desc: "RSI超卖+布林下轨+回调企稳", minScore: 25, sortBy: "position" },
   volume: { label: "找放量突破", desc: "成交量放大+价格突破+资金流入", minScore: 35, sortBy: "launch" },
   all: { label: "全面扫描", desc: "所有技术信号综合评分", minScore: 20, sortBy: "score" },
+  t3pullback: { label: "T+3回调低吸", desc: "T日放量→T+1涨停→T+2阴线→T+3低吸", minScore: 55, sortBy: "score" },
 };
 
 const FUND_SECTOR_MAP = {
@@ -91,9 +126,6 @@ const intradayKlineCache = new TTLCache({ maxSize: 200, defaultTTL: 60000 });
 
 // ==================== 可变单例 ====================
 
-const riskEngine = createRiskEngine(path.join(__dirname, "..", "config", "risk-limits.json"));
-const paperTradingManager = new PaperTradingManager();
-let paperAccount = paperTradingManager.getState();
 const monitorCache = { stocks: [], signals: {}, lastCheck: null };
 const pushedAlertIds = new Set();
 
@@ -103,14 +135,11 @@ module.exports = {
   INDEX_MAP,
   findIndexSecid,
   STOCK_POOL,
+  BREADTH_SAMPLE,
   SCAN_MODES,
   FUND_SECTOR_MAP,
   quoteCache,
   intradayKlineCache,
-  riskEngine,
-  paperTradingManager,
-  get paperAccount() { return paperAccount; },
-  set paperAccount(v) { paperAccount = v; },
   monitorCache,
   pushedAlertIds,
 };

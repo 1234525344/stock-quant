@@ -1,0 +1,68 @@
+/*
+ * IRef.cpp
+ *
+ *  Created on: 2015年3月21日
+ *      Author: fasiondog
+ */
+
+#include "IRef.h"
+
+#if HKU_SUPPORT_SERIALIZATION
+BOOST_CLASS_EXPORT(hku::IRef)
+#endif
+
+namespace hku {
+
+IRef::IRef() : IndicatorImp("REF", 1) {
+    setParam<int>("n", 1);
+}
+
+IRef::~IRef() {}
+
+void IRef::_checkParam(const string& name) const {
+    if ("n" == name) {
+        HKU_ASSERT(getParam<int>("n") >= 0);
+    }
+}
+
+void IRef::_calculate(const Indicator& data) {
+    size_t total = data.size();
+    int n = getParam<int>("n");
+
+    m_discard = data.discard() + n;
+    if (m_discard >= total) {
+        m_discard = total;
+        return;
+    }
+
+    _increment_calculate(data, m_discard);
+}
+
+void IRef::_increment_calculate(const Indicator& data, size_t start_pos) {
+    int n = getParam<int>("n");
+    auto const* src = data.data();
+    auto* dst = this->data();
+    for (size_t i = start_pos, total = data.size(); i < total; ++i) {
+        dst[i] = src[i - n];
+    }
+}
+
+void IRef::_dyn_run_one_step(const Indicator& ind, size_t curPos, size_t step) {
+    if (curPos >= step) {
+        _set(ind[curPos - step], curPos);
+    }
+}
+
+Indicator HKU_API REF(int n) {
+    IndicatorImpPtr p = make_shared<IRef>();
+    p->setParam<int>("n", n);
+    return Indicator(p);
+}
+
+Indicator HKU_API REF(const IndParam& n) {
+    IndicatorImpPtr p = make_shared<IRef>();
+    p->setIndParam("n", n);
+    return Indicator(p);
+}
+
+} /* namespace hku */

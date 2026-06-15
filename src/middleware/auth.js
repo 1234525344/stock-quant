@@ -5,18 +5,28 @@ const path = require("path");
 
 const KEY_FILE = path.join(__dirname, "..", "..", "data", "api-keys.json");
 
-// 初始化 key 文件
+// 内存缓存 — 启动时加载, 避免每次请求读盘
+let keysCache = null;
+
 function loadKeys() {
+  if (keysCache) return keysCache;
   try {
-    if (fs.existsSync(KEY_FILE)) return JSON.parse(fs.readFileSync(KEY_FILE, "utf8"));
+    if (fs.existsSync(KEY_FILE)) {
+      keysCache = JSON.parse(fs.readFileSync(KEY_FILE, "utf8"));
+      return keysCache;
+    }
   } catch (e) { /* ignore */ }
-  return [];
+  keysCache = [];
+  return keysCache;
 }
 
-function saveKeys(keys) {
+async function saveKeys(keys) {
+  keysCache = keys; // 立即更新缓存
   const dir = path.dirname(KEY_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(KEY_FILE, JSON.stringify(keys, null, 2), "utf8");
+  try {
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(KEY_FILE, JSON.stringify(keys, null, 2), "utf8");
+  } catch (e) { /* 写盘失败不阻塞 — 缓存已有最新数据 */ }
 }
 
 // 生成新 key

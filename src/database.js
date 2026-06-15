@@ -2,6 +2,7 @@
 const initSqlJs = require("sql.js");
 const fs = require("fs");
 const path = require("path");
+const { logger } = require("./logger");
 
 const DATA_DIR = path.join(__dirname, "..", "data");
 const DB_FILE = path.join(DATA_DIR, "stock-quant.db");
@@ -23,16 +24,16 @@ class Database {
       if (fs.existsSync(DB_FILE)) {
         const buffer = fs.readFileSync(DB_FILE);
         this.db = new SQL.Database(buffer);
-        console.log("[数据库] SQLite 已加载:", DB_FILE);
+        logger.info("[数据库] SQLite 已加载:", DB_FILE);
       } else {
         this.db = new SQL.Database();
-        console.log("[数据库] SQLite 已创建:", DB_FILE);
+        logger.info("[数据库] SQLite 已创建:", DB_FILE);
       }
 
       this.createTables();
       this.save();
     } catch (e) {
-      console.error("[数据库] 初始化失败:", e.message);
+      logger.error("[数据库] 初始化失败:", e.message);
       throw e;
     }
   }
@@ -96,19 +97,52 @@ class Database {
       )
     `);
 
-    // 性能监控表
+    // 自选股分组表
     this.db.run(`
-      CREATE TABLE IF NOT EXISTS performance (
+      CREATE TABLE IF NOT EXISTS watchlist_groups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        lcp INTEGER,
-        fid INTEGER,
-        cls REAL,
-        ttfb INTEGER,
-        url TEXT,
-        user_agent TEXT,
-        created_at TEXT DEFAULT (datetime('now', 'localtime'))
+        name TEXT NOT NULL,
+        sort_order INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now','localtime'))
       )
     `);
+
+    // 自选股表
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS watchlist (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT NOT NULL,
+        name TEXT,
+        type TEXT DEFAULT 'stock',
+        quantity INTEGER DEFAULT 0,
+        direction INTEGER DEFAULT 1,
+        group_id INTEGER DEFAULT 1,
+        sort_order INTEGER DEFAULT 0,
+        added_at TEXT DEFAULT (datetime('now','localtime')),
+        UNIQUE(code, group_id)
+      )
+    `);
+
+    // 新闻缓存表
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS news_cache (
+        hash TEXT PRIMARY KEY,
+        title TEXT,
+        summary TEXT,
+        source TEXT,
+        url TEXT,
+        published_at TEXT,
+        sentiment REAL DEFAULT 0,
+        sectors TEXT DEFAULT '[]',
+        impact TEXT,
+        conclusion TEXT,
+        related_codes TEXT DEFAULT '[]',
+        created_at TEXT DEFAULT (datetime('now','localtime'))
+      )
+    `);
+
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_news_created ON news_cache(created_at)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_news_sentiment ON news_cache(sentiment)`);
 
     // 创建索引
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_trades_code ON trades(code)`);
@@ -120,7 +154,9 @@ class Database {
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts(created_at)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_alerts_code ON alerts(code)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_alerts_read ON alerts(read)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_performance_created ON performance(created_at)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_watchlist_code ON watchlist(code)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_watchlist_group ON watchlist(group_id)`);
+
   }
 
   save() {
@@ -130,7 +166,7 @@ class Database {
       const buffer = Buffer.from(data);
       fs.writeFileSync(DB_FILE, buffer);
     } catch (e) {
-      console.warn("[数据库] 保存失败:", e.message);
+      logger.warn("[数据库] 保存失败:", e.message);
     }
   }
 
@@ -290,35 +326,126 @@ class Database {
     this.save();
   }
 
-  // ============ 性能监控 ============
-  insertPerformance(data) {
-    this.db.run(
-      `INSERT INTO performance (lcp, fid, cls, ttfb, url, user_agent) VALUES (?, ?, ?, ?, ?, ?)`,
-      [data.lcp, data.fid, data.cls, data.ttfb, data.url, data.userAgent]
-    );
+  // ============ 新闻缓存 ============
+  insertNewsItems(items) {
+    for (const item of items) {
+      this.db.run(
+        `INSERT OR REPLACE INTO news_cache
+         (hash, title, summary, source, url, published_at, sentiment, sectors, impact, conclusion, related_codes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [item.hash, item.title || '', item.summary || '', item.source || '',
+         item.url || '', item.publishedAt || '', item.sentiment || 0,
+         JSON.stringify(item.sectors || []), item.impact || '',
+         item.conclusion || '', JSON.stringify(item.relatedCodes || [])]
+      );
+    }
     this.save();
   }
 
-  getPerformanceStats() {
-    const result = this.db.exec(`
-      SELECT
-        AVG(lcp) as avg_lcp,
-        AVG(fid) as avg_fid,
-        AVG(cls) as avg_cls,
-        AVG(ttfb) as avg_ttfb,
-        COUNT(*) as total_samples
-      FROM performance
-      WHERE created_at > datetime('now', '-7 days')
-    `);
-    if (!result.length) return null;
-    const row = result[0].values[0];
-    return {
-      avgLcp: Math.round(row[0] || 0),
-      avgFid: Math.round(row[1] || 0),
-      avgCls: Math.round((row[2] || 0) * 1000) / 1000,
-      avgTtfb: Math.round(row[3] || 0),
-      totalSamples: row[4],
-    };
+  getRecentNews(limit = 500) {
+    const result = this.db.exec(
+      "SELECT * FROM news_cache ORDER BY created_at DESC LIMIT ?", [limit]
+    );
+    if (!result.length || !result[0].values.length) return [];
+    return result[0].values.map(row => ({
+      hash: row[0], title: row[1], summary: row[2], source: row[3],
+      url: row[4], publishedAt: row[5], sentiment: row[6],
+      sectors: JSON.parse(row[7] || '[]'),
+      impact: row[8], conclusion: row[9],
+      relatedCodes: JSON.parse(row[10] || '[]'),
+    }));
+  }
+
+  pruneNewsCache(keep = 2000) {
+    this.db.run("DELETE FROM news_cache WHERE hash NOT IN (SELECT hash FROM news_cache ORDER BY created_at DESC LIMIT ?)", [keep]);
+    this.save();
+  }
+
+  // ============ 自选股分组 ============
+  getWatchlistGroups() {
+    const result = this.db.exec("SELECT * FROM watchlist_groups ORDER BY sort_order");
+    if (!result.length || !result[0].values.length) return [];
+    return result[0].values.map(row => ({
+      id: row[0], name: row[1], sort_order: row[2], created_at: row[3]
+    }));
+  }
+
+  createWatchlistGroup(name) {
+    this.db.run("INSERT INTO watchlist_groups (name) VALUES (?)", [name]);
+    this.save();
+    const result = this.db.exec("SELECT last_insert_rowid()");
+    return result[0]?.values[0]?.[0] || 0;
+  }
+
+  deleteWatchlistGroup(id) {
+    this.db.run("DELETE FROM watchlist WHERE group_id = ?", [id]);
+    const result = this.db.exec("DELETE FROM watchlist_groups WHERE id = ?", [id]);
+    this.save();
+    return this.db.getRowsModified();
+  }
+
+  // ============ 自选股 CRUD ============
+  getWatchlistItems(groupId) {
+    let sql = "SELECT id, code, name, type, quantity, direction, group_id, sort_order, added_at FROM watchlist";
+    const params = [];
+    if (groupId) {
+      sql += " WHERE group_id = ?";
+      params.push(groupId);
+    }
+    sql += " ORDER BY sort_order, added_at";
+    const result = this.db.exec(sql, params);
+    if (!result.length || !result[0].values.length) return [];
+    return result[0].values.map(row => ({
+      id: row[0], code: row[1], name: row[2], type: row[3],
+      quantity: row[4], direction: row[5], group_id: row[6],
+      sort_order: row[7], added_at: row[8]
+    }));
+  }
+
+  addWatchlistItem({ code, name, type, quantity, direction, groupId }) {
+    this.db.run(
+      `INSERT OR REPLACE INTO watchlist (code, name, type, quantity, direction, group_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [code, name || code, type || "stock", quantity || 0, direction || 1, groupId || 1]
+    );
+    this.save();
+    const result = this.db.exec("SELECT last_insert_rowid()");
+    return result[0]?.values[0]?.[0] || 0;
+  }
+
+  deleteWatchlistItem(code) {
+    const result = this.db.exec("DELETE FROM watchlist WHERE code = ?", [code]);
+    this.save();
+    return this.db.getRowsModified();
+  }
+
+  updateWatchlistItem(code, fields) {
+    const updates = [];
+    const params = [];
+    if (fields.quantity !== undefined) { updates.push("quantity = ?"); params.push(fields.quantity); }
+    if (fields.direction !== undefined) { updates.push("direction = ?"); params.push(fields.direction); }
+    if (fields.group_id !== undefined) { updates.push("group_id = ?"); params.push(fields.group_id); }
+    if (updates.length === 0) return 0;
+    params.push(code);
+    this.db.run(`UPDATE watchlist SET ${updates.join(", ")} WHERE code = ?`, params);
+    this.save();
+    return this.db.getRowsModified();
+  }
+
+  updateWatchlistSort(codes) {
+    let updated = 0;
+    for (let i = 0; i < codes.length; i++) {
+      this.db.run("UPDATE watchlist SET sort_order = ? WHERE code = ?", [i, codes[i]]);
+      updated += this.db.getRowsModified();
+    }
+    this.save();
+    return updated;
+  }
+
+  clearWatchlist() {
+    this.db.run("DELETE FROM watchlist");
+    this.save();
+    return this.db.getRowsModified();
   }
 
   // ============ 数据清理 ============
@@ -327,7 +454,6 @@ class Database {
     const tables = [
       { name: "trades", column: "timestamp" },
       { name: "alerts", column: "created_at" },
-      { name: "performance", column: "created_at" },
     ];
 
     for (const { name, column } of tables) {
@@ -337,17 +463,17 @@ class Database {
       );
     }
     this.save();
-    console.log(`[数据库] 已清理 ${safeDays} 天前的数据`);
+    logger.info(`[数据库] 已清理 ${safeDays} 天前的数据`);
   }
 
   // ============ 数据库维护 ============
   vacuum() {
     this.db.run("VACUUM");
-    console.log("[数据库] VACUUM 完成");
+    logger.info("[数据库] VACUUM 完成");
   }
 
   getStats() {
-    const tables = ["trades", "daily_snapshots", "strategies", "alerts", "performance"];
+    const tables = ["trades", "daily_snapshots", "strategies", "alerts"];
     const stats = {};
     for (const table of tables) {
       const result = this.db.exec(`SELECT COUNT(*) FROM ${table}`);

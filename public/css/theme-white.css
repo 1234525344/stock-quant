@@ -1,0 +1,199 @@
+/* ═══════════════════════════════════════════
+   量化平台 - 白色金融终端主题 v2.0
+   设计规范: 扁平 / 白底 / 红涨绿跌
+═══════════════════════════════════════════ */
+
+/* ── BODY OVERRIDE ── */
+body {
+  background: #F5F6FA !important;
+  color: #333 !important;
+  min-height: 100vh;
+}
+
+/* ── LOADING SCREEN ── */
+#__loading {
+  background: #F5F6FA !important;
+  color: #1E88E5 !important;
+}
+
+/* ── HEADER ── */
+.header {
+  background: #FFFFFF !important;
+  border-bottom: 1px solid #EAEAEA !important;
+}
+.header .logo {
+  color: #1A1A2E !important;
+  font-weight: 700 !important;
+}
+
+/* ── NAV BUTTONS ── */
+.nav-btn {
+  color: #666 !important;
+  background: transparent !important;
+  border-radius: 4px;
+}
+.nav-btn:hover {
+  color: #333 !important;
+  background: #F5F6FA !important;
+}
+.nav-btn.active {
+  color: #1E88E5 !important;
+  background: #EBF3FF !important;
+  font-weight: 600 !important;
+}
+.nav-btn.nav-special {
+  color: #fff !important;
+}
+.nav-btn kbd {
+  color: #999 !important;
+  border-color: #DDD !important;
+  background: transparent !important;
+}
+.nav-group-label {
+  color: #999 !important;
+}
+
+/* ── SEARCH ── */
+.search-box input {
+  background: #F8F9FB !important;
+  border: 1px solid #DDD !important;
+  color: #333 !important;
+}
+.search-box input:focus {
+  border-color: #1E88E5 !important;
+  box-shadow: 0 0 0 2px rgba(30,136,229,.1) !important;
+}
+.search-dropdown {
+  background: #FFFFFF !important;
+  border: 1px solid #EAEAEA !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,.08) !important;
+  color: #333 !important;
+}
+.search-dropdown .item .code { color: #1E88E5 !important; }
+
+/* ── CARDS ── */
+.card {
+  background: #FFFFFF !important;
+  border: 1px solid #EAEAEA !important;
+  border-radius: 8px !important;
+}
+.card h3 { color: #1A1A2E !important; }
+
+/* ── KPI / INDEX CARDS ── */
+.index-card {
+  background: #FFFFFF !important;
+  border: 1px solid #EAEAEA !important;
+  border-radius: 8px !important;
+}
+.index-card .idx-name { color: #666 !important; }
+.index-card .idx-price { color: #1A1A2E !important; font-size: 20px; font-weight: 700; }
+.index-card .idx-change.up { color: #E53935 !important; }
+.index-card .idx-change.down { color: #43A047 !important; }
+
+/* ── MARKET WEATHER ── */
+.market-weather {
+  background: #FFFFFF !important;
+  border: 1px solid #EAEAEA !important;
+  color: #333 !important;
+}
+.market-weather.down {
+  background: #F0FFF4 !important;
+  border-color: #C6F6D5 !important;
+}
+
+/* ── FLOW ITEMS ── */
+.flow-item .fi-name { color: #333 !important; }
+.flow-item .fi-flow.flow-in { color: #E53935 !important; }
+.flow-item .fi-pct.up { color: #E53935 !important; }
+.flow-item .fi-pct.down { color: #43A047 !important; }
+
+/* ── TAGS ── */
+.tag {
+  color: #666 !important;
+  border-color: #DDD !important;
+  background: #FFFFFF !important;
+}
+.tag:hover {
+  border-color: #1E88E5 !important;
+  color: #1E88E5 !important;
+}
+.tag.active {
+  background: #1E88E5 !important;
+  color: #fff !important;
+  border-color: #1E88E5 !important;
+}
+
+/* ── TABLES ── */
+table { color: #333 !important; }
+th { color: #666 !important; background: #F8F9FB !important; }
+td { border-bottom: 1px solid #F2F2F2 !important; }
+
+/* ── CHARTS ── */
+.chart-container, .chart-wide {
+  background: #FFFFFF !important;
+  border: 1px solid #EAEAEA !important;
+  border-radius: 8px !important;
+}
+
+/* ── STATUS / LIVE DATA ── */
+#liveMarketMood { color: #333 !important; }
+
+/* ── HINTS ── */
+.hint { color: #999 !important; }
+.legend-hint { color: #999 !important; }
+
+/* ── PANEL HEADERS ── */
+.panel { background: #FFFFFF !important; border: 1px solid #EAEAEA !important; }
+.panel-header h2 { color: #1A1A2E !important; }
+.panel-header { border-bottom: 1px solid #F2F2F2 !important; }
+.panel-tabs { color: #666 !important; }
+
+/* ── BACKTEST / FORM ELEMENTS ── */
+select, input[type="text"], input[type="number"], textarea {
+  background: #F8F9FB !important;
+  border: 1px solid #DDD !important;
+  color: #333 !important;
+  border-radius: 4px !important;
+}
+select:focus, input:focus, textarea:focus {
+  border-color: #1E88E5 !important;
+}
+
+/* ── BUTTONS ── */
+button.tab, .panel-tabs button, .opt-btn {
+  background: #F5F6FA !important;
+  border: 1px solid #EAEAEA !important;
+  color: #666 !important;
+}
+button.tab.active, .panel-tabs button.active {
+  background: #1E88E5 !important;
+  color: #fff !important;
+}
+
+/* ── STATUS STRIP ── */
+.status-strip {
+  background: #FFFFFF !important;
+  border: 1px solid #EAEAEA !important;
+  border-radius: 8px !important;
+}
+
+/* ── BREADCRUMB / SUB-NAV ── */
+.alpha-strip {
+  background: #FFFFFF !important;
+  border-bottom: 1px solid #EAEAEA !important;
+}
+
+/* ── PAGE SECTIONS ── */
+.page { background: transparent !important; }
+
+/* ── SECTION INFO BOX ── */
+.section-intro, .panel > div[style] {
+  color: #333 !important;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .nav-btn { padding: 6px 10px; font-size: 12px; }
+  .nav-btn kbd { display: none; }
+  .search-box input { width: 120px; }
+}

@@ -7,6 +7,11 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop stock-quant",
+    "pm2:restart": "pm2 restart stock-quant",
+    "pm2:logs": "pm2 logs stock-quant",
+    "pm2:status": "pm2 status",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "electron": "electron electron-main.js",
@@ -15,7 +20,10 @@
   },
   "dependencies": {
     "axios": "^1.7.0",
+    "better-sqlite3": "^12.10.0",
     "canvas": "^3.2.3",
+    "compression": "^1.8.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "docx": "^9.6.1",
     "dotenv": "^16.4.0",
@@ -27,8 +35,8 @@
     "openai": "^4.73.0",
     "playwright": "^1.60.0",
     "playwright-extra": "^4.3.6",
+    "pm2": "^7.0.1",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "sql.js": "^1.14.1",
     "ws": "^8.20.1",
     "xlsx-populate": "^1.21.0"
   },

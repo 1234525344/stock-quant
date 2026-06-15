@@ -1,0 +1,307 @@
+# -*- coding: utf8 -*-
+
+from hikyuu.core import (
+    System, SystemPart, ConditionBase, EnvironmentBase, MoneyManagerBase,
+    ProfitGoalBase, SelectorBase, SignalBase, SlippageBase, StoplossBase, AllocateFundsBase,
+    MultiFactorBase, ScoresFilterBase, NormalizeBase
+)
+
+
+def part_iter(self):
+    for i in range(len(self)):
+        yield self[i]
+
+
+ConditionBase.__iter__ = part_iter
+
+
+def part_init(self, name='', params={}):
+    super(self.__class__, self).__init__(name)
+    self._name = name
+    self._params = params
+    for k, v in params.items():
+        self.set_param(k, v)
+
+
+def part_clone(self):
+    cloned = self.__class__.__new__(self.__class__)
+    self.__class__.__init__(cloned, self)
+    cloned.__dict__.update(self.__dict__)
+    return cloned
+
+
+# ------------------------------------------------------------------
+# System
+# ------------------------------------------------------------------
+System.Part = SystemPart
+System.ENVIRONMENT = System.Part.ENVIRONMENT
+System.CONDITION = System.Part.CONDITION
+System.SIGNAL = System.Part.SIGNAL
+System.STOPLOSS = System.Part.STOPLOSS
+System.TAKEPROFIT = System.Part.TAKEPROFIT
+System.MONEYMANAGER = System.Part.MONEYMANAGER
+System.PROFITGOAL = System.Part.PROFITGOAL
+System.SLIPPAGE = System.Part.SLIPPAGE
+System.INVALID = System.Part.INVALID
+
+
+# ------------------------------------------------------------------
+# condition
+# ------------------------------------------------------------------
+def crtCN(func, params={}, name='crtCN'):
+    """
+    快速创建系统有效条件
+
+    :param func: 系统有效条件函数
+    :param {} params: 参数字典
+    :param str name: 自定义名称
+    :return: 自定义系统有效条件实例
+    """
+    meta_x = type(name, (ConditionBase, ), {'__init__': part_init, '_clone': part_clone})
+    meta_x._calculate = func
+    # 强制引入全局空间，避免 hub 使用是自定义继承丢失虚拟函数接口
+    ret = meta_x(name, params)
+    globals().update(dict(_=ret))
+    return ret
+
+
+# ------------------------------------------------------------------
+# environment
+# ------------------------------------------------------------------
+def crtEV(func, params={}, name='crtEV'):
+    """
+    快速创建市场环境判断策略
+
+    :param func: 市场环境判断策略函数
+    :param {} params: 参数字典
+    :param str name: 自定义名称
+    :return: 自定义市场环境判断策略实例
+    """
+    meta_x = type(name, (EnvironmentBase, ), {'__init__': part_init, '_clone': part_clone})
+    meta_x._calculate = func
+    ret = meta_x(name, params)
+    globals().update(dict(_=ret))
+    return ret
+
+
+# ------------------------------------------------------------------
+# moneymanager
+# ------------------------------------------------------------------
+def crtMM(get_buy_num, get_sell_num=None, params={}, name='crtMM', buy_notify=None, sell_notify=None):
+    """
+    快速创建资金管理策略
+
+    :param get_buy_num: 买入数量接口
+    :param get_sell_num: 卖出数量接口, 默认为 None(卖出全部)
+    :param {} params: 参数字典
+    :param str name: 自定义名称
+    :param buy_notify: 接收买入交易记录通知
+    :param sell_notify: 接收卖出交易记录通知
+    :return: 自定义资金管理策略实例
+    """
+    meta_x = type(name, (MoneyManagerBase, ), {'__init__': part_init, '_clone': part_clone})
+    meta_x._get_buy_num = get_buy_num
+    if get_sell_num is not None:
+        meta_x._get_sell_num = get_sell_num
+    if buy_notify is not None:
+        meta_x._buy_notify = buy_notify
+    if sell_notify is not None:
+        meta_x._sell_notify = sell_notify
+    ret = meta_x(name, params)
+    globals().update(dict(_=ret))
+    return ret
+
+
+# ------------------------------------------------------------------
+# profitgoal
+# ------------------------------------------------------------------
+def crtPG(get_goal, calculate=None, params={}, name='crtPG', buy_notify=None, sell_notify=None):
+    """
+    快速创建盈利目标策略
+
+    :param get_goal: 获取目标价格接口
+    :param calculate: 内部计算接口（在指定交易标的时被调用）
+    :param {} params: 参数字典
+    :param str name: 自定义名称
+    :param buy_notify: 接收买入交易记录通知
+    :param sell_notify: 接收卖出交易记录通知
+    :return: 盈利目标策略实例
+    """
+    meta_x = type(name, (ProfitGoalBase, ), {'__init__': part_init, '_clone': part_clone})
+    meta_x.get_goal = get_goal
+    if calculate is not None:
+        meta_x._calculate = calculate
+    if buy_notify is not None:
+        meta_x._buy_notify = buy_notify
+    if sell_notify is not None:
+        meta_x._sell_notify = sell_notify
+    ret = meta_x(name, params)
+    globals().update(dict(_=ret))
+    return ret
+
+
+# ------------------------------------------------------------------
+# signal
+# ------------------------------------------------------------------
+def crtSG(func, params={}, name='crtSG'):
+    """
+    快速创建信号指示器
+
+    :param func: 信号策略函数
+    :param {} params: 参数字典
+    :param str name: 自定义名称
+    :return: 自定义信号指示器实例
+    """
+    meta_x = type(name, (SignalBase, ), {'__init__': part_init, '_clone': part_clone})
+    meta_x._calculate = func
+    ret = meta_x(name, params)
+    globals().update(dict(_=ret))
+    return ret
+
+
+# ------------------------------------------------------------------
+# Selector
+# ------------------------------------------------------------------
+def crtSE(calculate, get_selected, is_match_af=None, params={}, name='crtSE'):
+    """
+    快速创建交易对象选择算法
+
+    :param calculate function: 计算函数
+    :param get_selected_on_close function: 收盘时刻选择算法
+    :param get_selected_on_open function: 开盘时刻选择算法
+    :param {} params: 参数字典
+    :param str name: 自定义名称
+    :return: 自定义交易对象选择算法实例
+    """
+    meta_x = type(name, (SelectorBase, ), {'__init__': part_init, '_clone': part_clone})
+    meta_x._calculate = calculate
+    meta_x.get_selected = get_selected
+    meta_x.is_match_af = (lambda self, af: True) if is_match_af is None else is_match_af
+    ret = meta_x(name, params)
+    globals().update(dict(_=ret))
+    return ret
+
+
+# ------------------------------------------------------------------
+# allocatefunds
+# ------------------------------------------------------------------
+def crtAF(allocate_weight_func, params={}, name='crtAF'):
+    """
+    快速创建资产分配算法
+
+    :param allocate_weight_func: 资产分配算法
+    :param {} params: 参数字典
+    :param str name: 自定义名称
+    :return: 自定义资产分配算法实例
+    """
+    meta_x = type(name, (AllocateFundsBase, ), {'__init__': part_init, '_clone': part_clone})
+    meta_x._allocate_weight = allocate_weight_func
+    ret = meta_x(name, params)
+    globals().update(dict(_=ret))
+    return ret
+
+
+# ------------------------------------------------------------------
+# multi_factor
+# ------------------------------------------------------------------
+def crtMF(calculate_func, params={}, name='crtMF'):
+    """
+    快速多因子合成算法
+
+    :param calculate_func: 合成算法
+    :param {} params: 参数字典
+    :param str name: 自定义名称
+    :return: 自定义多因子合成算法实例
+    """
+    meta_x = type(name, (MultiFactorBase, ), {'__init__': part_init, '_clone': part_clone})
+    meta_x._calculate = calculate_func
+    ret = meta_x(name, params)
+    globals().update(dict(_=ret))
+    return ret
+
+
+# ------------------------------------------------------------------
+# slippage
+# ------------------------------------------------------------------
+def crtSP(get_real_buy_price, get_real_sell_price, params={}, name='crtSP', calculate=None):
+    """
+    快速创建移滑价差算法
+
+    :param get_real_buy_price: 移滑价差算法接口计算实际买入价格
+    :param get_real_sell_price: 移滑价差算法接口计算实际买入价格
+    :param {} params: 参数字典
+    :param str name: 自定义名称
+    :param calculate: 预处理函数
+    :return: 移滑价差算法实例
+    """
+    meta_x = type(name, (SlippageBase, ), {'__init__': part_init, '_clone': part_clone})
+    meta_x.get_real_buy_price = get_real_buy_price
+    meta_x.get_real_sell_price = get_real_sell_price
+    if calculate is not None:
+        meta_x._calculate = calculate
+    ret = meta_x(name, params)
+    globals().update(dict(_=ret))
+    return ret
+
+
+# ------------------------------------------------------------------
+# stoploss
+# ------------------------------------------------------------------
+def crtST(get_price, params={}, name='crtST', calculate=None, get_short_price=None):
+    """
+    快速创建止损/止盈策略
+
+    :param get_price: 止损/止盈策略获取止损价接口函数
+    :param {} params: 参数字典
+    :param str name: 自定义名称
+    :param calculate: 止损/止盈策略初始化计算函数
+    :param get_short_price: 获取空头止损价接口函数
+    :return: 止损/止盈策略实例
+    """
+    meta_x = type(name, (StoplossBase, ), {'__init__': part_init, '_clone': part_clone})
+    meta_x.get_price = get_price
+    if calculate is not None:
+        meta_x._calculate = calculate
+    if get_short_price is not None:
+        meta_x.get_short_price = get_short_price
+    ret = meta_x(name, params)
+    globals().update(dict(_=ret))
+    return ret
+
+
+# ------------------------------------------------------------------
+# SCFilter
+# ------------------------------------------------------------------
+def crtSCFilter(filter_func, params={}, name='crtSCFilter'):
+    """
+    快速创建评分过滤器
+
+    :param filter_func: 评分过滤器函数
+    :param {} params: 参数字典
+    :param str name: 自定义名称
+    :return: 评分过滤器实例
+    """
+    meta_x = type(name, (ScoresFilterBase, ), {'__init__': part_init, '_clone': part_clone})
+    meta_x._filter = filter_func
+    ret = meta_x(name, params)
+    globals().update(dict(_=ret))
+    return ret
+
+
+# ------------------------------------------------------------------
+# Normalize
+# ------------------------------------------------------------------
+def crtNorm(normalize_func, params={}, name='crtNorm'):
+    """
+    快速创建标准化/归一化等算法函数
+
+    :param normalize_func: 算法函数
+    :param {} params: 参数字典
+    :param str name: 自定义名称
+    :return: 函数实例
+    """
+    meta_x = type(name, (NormalizeBase, ), {'__init__': part_init, '_clone': part_clone})
+    meta_x._normalize = normalize_func
+    ret = meta_x(name, params)
+    globals().update(dict(_=ret))
+    return ret

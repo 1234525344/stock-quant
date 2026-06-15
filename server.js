@@ -2,27 +2,42 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const http = require("http");
+const cookieParser = require("cookie-parser");
 const WebSocket = require("ws");
 const rateLimit = require("express-rate-limit");
 const helmet = require("helmet");
 const cors = require("cors");
-const { errorHandler, notFoundHandler, requestLogger } = require("./src/middleware/errorHandler");
+const { errorHandler, notFoundHandler } = require("./src/middleware/errorHandler");
+const { checkPassword, getPasswordInfo, generateToken, verifyToken, COOKIE_NAME, COOKIE_MAX_AGE, refreshCookie } = require("./src/middleware/auth-gate");
 const { getRealtimeEngine } = require("./src/realtime-engine");
 const { getTDXTCPClient, connectTDXServer } = require("./src/tdx-tcp");
-const { STOCK_POOL, riskEngine, paperTradingManager, monitorCache, pushedAlertIds } = require("./src/state");
+const { STOCK_POOL, monitorCache, pushedAlertIds } = require("./src/state");
 const { isTradingHours } = require("./src/helpers");
+const { logger } = require("./src/logger");
 
 // 路由模块
 const systemRoutes = require("./src/routes/system");
 const marketRoutes = require("./src/routes/market");
 const fundflowRoutes = require("./src/routes/fundflow");
 const fundsRoutes = require("./src/routes/funds");
-const strategyRoutes = require("./src/routes/strategy");
 const aiRoutes = require("./src/routes/ai");
 const tradingRoutes = require("./src/routes/trading");
-const portfolioRoutes = require("./src/routes/portfolio");
+const scanRoutes = require("./src/routes/scan");
+const etfRotateRoutes = require("./src/routes/etf-rotate");
+const trendPickRoutes = require("./src/routes/trend-pick");
+const mlRoutes = require("./src/routes/ml");
+const autotradeRoutes = require("./src/routes/autotrade");
+const hotmoneyRoutes = require("./src/routes/hotmoney");
+const limitupRoutes = require("./src/routes/limitup");
+const newsRoutes = require("./src/routes/news");
+const watchlistRoutes = require("./src/routes/watchlist");
+const newsEngine = require("./src/news-engine");
 
 const app = express();
+app.set("trust proxy", 1); // Cloudflare Tunnel 需要信任代理
+
+// Gzip/brotli 响应压缩 (JSON体积减少70%+, 首屏加载减半)
+app.use(require("compression")());
 
 // 安全头
 app.use(helmet({
@@ -30,6 +45,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      scriptSrcAttr: ["'unsafe-inline'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'", "ws:", "wss:"],
@@ -49,15 +65,121 @@ app.use(cors({
 // 请求体限制
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false }));
-app.use(express.static(path.join(__dirname, "public")));
+app.use(cookieParser());
 
-// 请求日志
-app.use(requestLogger);
+// ===== 认证接口 (必须在 accessGuard 之前) =====
+// 验证密码
+app.post("/api/auth/login", (req, res) => {
+  const { password } = req.body || {};
+  if (!checkPassword(password || "")) {
+    return res.status(401).json({ error: "密码错误", code: "WRONG_PASSWORD" });
+  }
+  const ip = req.ip || req.socket?.remoteAddress;
+  const token = generateToken(ip);
+  res.cookie(COOKIE_NAME, token, {
+    maxAge: COOKIE_MAX_AGE, httpOnly: true,
+    secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/",
+  });
+  res.json({ success: true, message: "验证成功" });
+});
+
+// 查看密码信息 (本地)
+app.get("/api/auth/password", (req, res) => {
+  const ip = req.ip || req.socket?.remoteAddress;
+  if (ip !== "127.0.0.1" && ip !== "::1" && ip !== "::ffff:127.0.0.1") {
+    return res.status(403).json({ error: "仅限本地访问" });
+  }
+  res.json(getPasswordInfo());
+});
+
+// 检查登录状态
+app.get("/api/auth/status", (req, res) => {
+  const token = req.cookies?.[COOKIE_NAME];
+  const valid = token && verifyToken(token);
+  res.json({ authenticated: !!valid });
+});
+
+// 登出 (清除 cookie)
+app.post("/api/auth/logout", (req, res) => {
+  res.clearCookie(COOKIE_NAME);
+  res.json({ success: true });
+});
+
+// 登录页 (无 cookie 也能访问)
+app.get("/login.html", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "login.html"));
+});
+
+// 静态资源 (认证守卫之前 — CSS/JS/图片无需登录即可加载)
+const staticOptions = {
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    }
+  }
+};
+app.use(express.static(path.join(__dirname, "public"), staticOptions));
+
+// ===== 访问守卫 =====
+app.use((req, res, next) => {
+  // 始终放行
+  if (req.path === "/login.html") return next();
+  if (req.path.startsWith("/api/auth/")) return next();
+  // 静态资源已在守卫之前被 express.static 处理, 不会到达此处
+  // 仅 HTML 页面和 /api/ 请求需要认证
+
+  // 检查登录 cookie — 验证通过时自动续期
+  const token = req.cookies?.[COOKIE_NAME];
+  if (token && verifyToken(token)) {
+    // 每次请求都续期 cookie, 确保只要用户持续使用就不会过期
+    refreshCookie(res, token);
+    return next();
+  }
+
+  // API: 返回 401 JSON
+  if (req.path.startsWith("/api/") || (req.headers.accept || "").includes("application/json")) {
+    return res.status(401).json({ error: "未授权", requireAuth: true });
+  }
+
+  // 页面: 返回登录页 HTML (不跳转, 避免循环)
+  return res.sendFile(path.join(__dirname, "public", "login.html"));
+});
+
+// 管理面板 (登录后访问)
+app.get("/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "admin.html"));
+});
 
 // 免责声明响应头
 app.use((req, res, next) => {
   res.setHeader("X-Disclaimer", encodeURIComponent("数据仅供参考，不构成投资建议"));
   next();
+});
+
+// Correlation ID & 请求指标
+const { correlationId } = require("./src/middleware/correlation-id");
+const { metrics } = require("./src/metrics");
+app.use(correlationId());
+app.use("/api/", metrics.requestMiddleware());
+
+// 慢API日志 (环境变量 LOG_API_LATENCY=true 启用)
+if (process.env.LOG_API_LATENCY === 'true') {
+  app.use('/api/', (req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const ms = Date.now() - start;
+      if (ms > 500) logger.warn(`[SLOW] ${req.method} ${req.path} ${ms}ms`);
+    });
+    next();
+  });
+}
+
+// Prometheus 指标端点
+app.get("/api/metrics", (req, res) => {
+  res.set("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+  res.send(metrics.toPrometheus());
 });
 
 // 全局限流
@@ -116,10 +238,17 @@ app.use(systemRoutes);
 app.use(marketRoutes);
 app.use(fundflowRoutes);
 app.use(fundsRoutes);
-app.use(strategyRoutes);
 app.use("/api/ai", aiRoutes);
 app.use(tradingRoutes);
-app.use(portfolioRoutes);
+app.use(scanRoutes);
+app.use(etfRotateRoutes);
+app.use(trendPickRoutes);
+app.use(mlRoutes);
+app.use(autotradeRoutes);
+app.use(hotmoneyRoutes);
+app.use(limitupRoutes);
+app.use(newsRoutes);
+app.use(watchlistRoutes);
 
 // 404处理
 app.use(notFoundHandler);
@@ -130,16 +259,24 @@ app.use(errorHandler);
 // ==================== 服务器启动 ====================
 
 const PORT = process.env.PORT || 3456;
-const WS_PORT = process.env.WS_PORT || 3457;
 const HOST = process.env.HOST || "0.0.0.0";
 
 const server = http.createServer(app);
 
-// WebSocket服务器
-const wss = new WebSocket.Server({ port: WS_PORT, host: HOST });
+// WebSocket 挂载到 HTTP 同一端口 (通过 Cloudflare 隧道对外)
+const wss = new WebSocket.Server({
+  server,
+  verifyClient: (info, done) => {
+    const cookies = (info.req.headers.cookie || "").split(";").reduce((m, c) => {
+      const [k, v] = c.trim().split("="); if (k) m[k] = v; return m;
+    }, {});
+    if (verifyToken(cookies[COOKIE_NAME])) return done(true);
+    done(false, 401, "Unauthorized");
+  },
+});
 
 wss.on("listening", () => {
-  console.log(`WebSocket实时推送已启动: ws://${HOST}:${WS_PORT}`);
+  console.log(`WebSocket实时推送已启动: ws://${HOST}:${PORT}`);
 });
 
 // 初始化实时引擎
@@ -150,97 +287,30 @@ console.log("[实时引擎] 已启动, 缓存TTL=" + CACHE_TTL + "ms");
 // 自动订阅默认股票池
 realtimeEngine.subscribeCodes(STOCK_POOL);
 
-// 尝试连接通达信TCP
-connectTDXServer();
-const tdxClient = getTDXTCPClient();
-tdxClient.onStatus((s) => {
-  if (s.status === "connected") {
-    console.log("[通达信TCP] 已连接:", s.host + ":" + s.port);
-    tdxClient.subscribe(STOCK_POOL);
-  } else if (s.status === "reconnecting") {
-    console.log("[通达信TCP] 重连中...");
-  }
-});
-tdxClient.onQuote((quote) => {
-  realtimeEngine._updateQuote(quote.code, quote);
-});
-
-// ==================== 全自动风控引擎 ====================
-
-async function autoRiskTick() {
-  try {
-    const posData = riskEngine.positions.toJSON();
-    const codes = posData.positions.map(p => p.code);
-
-    if (codes.length > 0) {
-      const engine = getRealtimeEngine();
-      const quotes = codes.map(c => engine.getQuote(c)).filter(Boolean);
-
-      if (quotes.length > 0) {
-        riskEngine.positions.updatePrices(quotes);
-
-        const newAlerts = [];
-        for (const q of quotes) {
-          const alert = riskEngine.alerts.checkPriceLimit(q, q.preClose);
-          if (alert) newAlerts.push(alert);
-        }
-
-        const pnlPct = riskEngine.positions.getTotalPnlPct() * 100;
-        const lossAlert = riskEngine.alerts.checkPortfolioLoss(pnlPct);
-        if (lossAlert) newAlerts.push(lossAlert);
-
-        const returns = posData.dailySnapshots.slice(-10).map((s, i, arr) => {
-          if (i === 0) return 0;
-          return arr[i - 1].equity > 0 ? (s.equity - arr[i - 1].equity) / arr[i - 1].equity : 0;
-        });
-        const declineAlert = riskEngine.alerts.checkConsecutiveDecline(returns);
-        if (declineAlert) newAlerts.push(declineAlert);
-
-        const trulyNew = newAlerts.filter(a => !pushedAlertIds.has(a.id));
-        riskEngine.alerts.addAlerts(trulyNew);
-
-        if (trulyNew.length > 0) {
-          for (const alert of trulyNew) pushedAlertIds.add(alert.id);
-          if (pushedAlertIds.size > 500) pushedAlertIds.clear();
-
-          engine._broadcastAll({
-            type: "risk_alert",
-            alerts: trulyNew,
-            summary: riskEngine.alerts.getAlertSummary(),
-            timestamp: new Date().toISOString(),
-          });
-        }
+// 尝试连接通达信TCP（连接失败不影响主服务）
+let tdxClient = null;
+let _tdxReconnectCount = 0;
+try {
+  connectTDXServer();
+  tdxClient = getTDXTCPClient();
+  tdxClient.onStatus((s) => {
+    if (s.status === "connected") {
+      console.log("[通达信TCP] 已连接:", s.host + ":" + s.port);
+      tdxClient.subscribe(STOCK_POOL);
+      _tdxReconnectCount = 0;
+    } else if (s.status === "reconnecting") {
+      _tdxReconnectCount++;
+      if (_tdxReconnectCount % 30 === 1) {
+        console.log("[通达信TCP] 重连中... (第" + _tdxReconnectCount + "次)");
       }
     }
-
-    // 15:00-15:05 自动日终快照
-    const now = new Date();
-    const min = now.getHours() * 60 + now.getMinutes();
-    if (min >= 900 && min <= 905) {
-      const today = now.toISOString().slice(0, 10);
-      const lastSnapshot = posData.dailySnapshots.slice(-1)[0];
-      if (!lastSnapshot || lastSnapshot.date !== today) {
-        riskEngine.positions._takeSnapshot();
-        console.log("[风控] 日终快照已保存:", today);
-      }
-    }
-  } catch (e) { /* 静默失败 */ }
+  });
+  tdxClient.onQuote((quote) => {
+    try { realtimeEngine._updateQuote(quote.code, quote); } catch (e) {}
+  });
+} catch (e) {
+  console.error("[通达信TCP] 启动失败:", e.message);
 }
-
-// 后台定时器
-let autoTickInterval = setInterval(autoRiskTick, 30000);
-
-function adjustTickInterval() {
-  const trading = isTradingHours();
-  const newInterval = trading ? 30000 : 120000;
-  if (autoTickInterval) clearInterval(autoTickInterval);
-  autoTickInterval = setInterval(autoRiskTick, newInterval);
-}
-
-setInterval(adjustTickInterval, 300000);
-adjustTickInterval();
-
-console.log("[风控] 全自动监控已启动 (交易时段30s/非交易120s)");
 
 // ==================== SQLite 数据库 ====================
 
@@ -259,9 +329,11 @@ const database = require("./src/database");
 
 server.listen(PORT, HOST, () => {
   console.log(`量化系统已启动: http://${HOST}:${PORT}`);
-  console.log(`WebSocket: ws://${HOST}:${WS_PORT}`);
+  console.log(`WebSocket: ws://${HOST}:${PORT}`);
   console.log(`通达信本地数据: C:\\new_tdx64`);
   console.log(`环境: ${process.env.NODE_ENV || "development"}`);
+  // 启动新闻引擎
+  newsEngine.start();
 });
 
 // 优雅关闭
@@ -282,17 +354,21 @@ function gracefulShutdown(signal) {
   try { realtimeEngine.stop(); } catch (e) {}
   console.log("[关闭] 实时引擎已停止");
 
-  // 停止风控定时器
-  if (autoTickInterval) clearInterval(autoTickInterval);
-  console.log("[关闭] 风控定时器已停止");
+  // 停止新闻引擎
+  try { newsEngine.stop(); } catch (e) {}
+  console.log("[关闭] 新闻引擎已停止");
 
   // 关闭数据库
   try { database.close(); } catch (e) {}
   console.log("[关闭] 数据库已关闭");
 
   // 关闭通达信连接
-  try { tdxClient.disconnect(); } catch (e) {}
+  if (tdxClient) { try { tdxClient.disconnect(); } catch (e) {} }
   console.log("[关闭] 通达信连接已关闭");
+
+  // 刷盘日志缓冲区
+  try { logger.flushSync(); } catch (e) {}
+  console.log("[关闭] 日志已刷盘");
 
   console.log("[关闭] 优雅关闭完成");
   process.exit(0);
@@ -303,8 +379,15 @@ process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
 // 未捕获异常处理
 process.on("uncaughtException", (err) => {
-  console.error("[致命错误] 未捕获异常:", err.message);
+  console.error("[致命错误] 未捕获异常:", err.message, err.stack);
   gracefulShutdown("uncaughtException");
+});
+
+// 未处理的Promise拒绝 — 记录但不崩溃（这是之前服务器挂掉的主要原因）
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[未处理拒绝]", reason?.message || reason);
+  if (reason?.stack) console.error(reason.stack.slice(0, 500));
+  // 不调用 gracefulShutdown，避免因单个异步错误就挂掉整个服务
 });
 
 module.exports = { app, server, wss, realtimeEngine };

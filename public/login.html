@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>量化交易平台 — 访问验证</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: linear-gradient(135deg, #0a0e27 0%, #1a1040 50%, #0a0e27 100%);
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 30px 0;
+}
+.login-box {
+  background: rgba(17, 20, 45, 0.9);
+  border: 1px solid rgba(108, 99, 255, 0.2);
+  border-radius: 16px;
+  padding: 40px 36px;
+  width: 380px;
+  max-width: 90vw;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.login-box .icon { text-align: center; font-size: 48px; margin-bottom: 8px; }
+.login-box h2 { text-align: center; font-size: 20px; color: #e0e6ed; font-weight: 600; margin-bottom: 4px; }
+.login-box .sub { text-align: center; font-size: 12px; color: #6b7280; margin-bottom: 24px; }
+.login-box label { display: block; font-size: 12px; color: #9ca3af; margin-bottom: 6px; }
+.login-box input {
+  width: 100%; padding: 12px 14px; font-size: 15px; background: #0d1117;
+  border: 1px solid #30363d; border-radius: 8px; color: #e0e6ed; outline: none;
+  font-family: inherit; transition: .2s; margin-bottom: 16px;
+}
+.login-box input:focus { border-color: #6c63ff; box-shadow: 0 0 0 3px rgba(108,99,255,0.15); }
+.login-box input::placeholder { color: #444; }
+.login-box button {
+  width: 100%; padding: 12px; font-size: 15px; font-weight: 600;
+  background: linear-gradient(135deg, #6c63ff, #4da6ff); color: #fff;
+  border: none; border-radius: 8px; cursor: pointer; font-family: inherit; transition: .2s;
+}
+.login-box button:hover { opacity: 0.9; transform: translateY(-1px); }
+.login-box button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.login-box .error { text-align: center; color: #ef4444; font-size: 12px; margin-top: 8px; min-height: 18px; }
+.login-box .hint { text-align: center; font-size: 11px; color: #4b5563; margin-top: 16px; line-height: 1.6; }
+
+.vip-box {
+  background: rgba(17, 20, 45, 0.9);
+  border: 1px solid rgba(108, 99, 255, 0.3);
+  border-radius: 16px; padding: 30px 28px;
+  width: 690px; max-width: 94vw;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+  margin-top: 28px;
+}
+.vip-header { text-align: center; font-size: 22px; color: #f59e0b; font-weight: 700; margin-bottom: 4px; }
+.vip-sub { text-align: center; font-size: 12px; color: #6b7280; margin-bottom: 24px; }
+.plans { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 24px; }
+.plan { background: rgba(13,17,23,0.6); border: 1px solid #30363d; border-radius: 12px; padding: 20px 16px; width: 180px; text-align: center; transition: .2s; }
+.plan:hover { border-color: #6c63ff; transform: translateY(-2px); }
+.plan-featured { border-color: #f59e0b; position: relative; }
+.plan-badge { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: #f59e0b; color: #000; font-size: 11px; font-weight: 700; padding: 2px 12px; border-radius: 10px; }
+.plan-name { font-size: 14px; color: #e0e6ed; font-weight: 600; margin-bottom: 8px; }
+.plan-price { font-size: 28px; color: #6c63ff; font-weight: 700; margin-bottom: 12px; }
+.plan-price span { font-size: 12px; color: #6b7280; font-weight: 400; }
+.plan-features { text-align: left; }
+.plan-features div { font-size: 11px; color: #9ca3af; padding: 3px 0; }
+.qr-section { text-align: center; }
+.qr-row { display: flex; gap: 20px; justify-content: center; margin-bottom: 12px; }
+.qr-item { text-align: center; }
+.qr-label { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+.pay-hint { font-size: 12px; color: #6b7280; margin: 12px 0; line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<div class="login-box">
+  <div class="icon">🔐</div>
+  <h2>量化交易平台</h2>
+  <div class="sub">请输入访问密码</div>
+
+  <label>密码</label>
+  <input type="password" id="pwd" placeholder="输入访问密码..." autofocus onkeydown="if(event.key==='Enter')doLogin()">
+  <button id="btn" onclick="doLogin()">验证进入</button>
+  <div class="error" id="error"></div>
+  <div class="hint">验证通过后, 30天内无需重复输入<br>本机浏览器自动记住登录状态</div>
+</div>
+
+<div class="vip-box">
+  <div class="vip-header">⚡ 解锁全部功能</div>
+  <div class="vip-sub">扫码付款后联系客服开通, 24小时内激活</div>
+  <div class="plans">
+    <div class="plan">
+      <div class="plan-name">API 月卡</div>
+      <div class="plan-price">¥19.9<span>/月</span></div>
+      <div class="plan-features">
+        <div>✓ 实时行情数据 API</div>
+        <div>✓ K线数据接口</div>
+        <div>✓ 选股扫描接口</div>
+        <div>✓ 资金流向接口</div>
+        <div>✓ 500次/天请求</div>
+      </div>
+    </div>
+    <div class="plan">
+      <div class="plan-name">每日选股</div>
+      <div class="plan-price">¥9.9<span>/月</span></div>
+      <div class="plan-features">
+        <div>✓ 每日3-6只精选标的</div>
+        <div>✓ 多因子综合评分</div>
+        <div>✓ 买卖信号提示</div>
+        <div>✓ 精美图片卡片</div>
+        <div>✓ 闲鱼/微信推送</div>
+      </div>
+    </div>
+    <div class="plan plan-featured">
+      <div class="plan-badge">🔥 最受欢迎</div>
+      <div class="plan-name">完整源码</div>
+      <div class="plan-price">¥99<span>/永久</span></div>
+      <div class="plan-features">
+        <div>✓ 全部功能源码</div>
+        <div>✓ 私有化部署教程</div>
+        <div>✓ 1个月技术支持</div>
+        <div>✓ 后续免费更新</div>
+        <div>✓ 1对1部署协助</div>
+      </div>
+    </div>
+  </div>
+  <div class="qr-section">
+    <div class="qr-row">
+      <div class="qr-item">
+        <img src="/images/微信收款码.jpg" alt="微信支付" style="width:140px;height:140px;border-radius:8px;">
+        <div class="qr-label">微信支付</div>
+      </div>
+      <div class="qr-item">
+        <img src="/images/alipay-qr.png" alt="支付宝" style="width:140px;height:140px;border-radius:8px;">
+        <div class="qr-label">支付宝</div>
+      </div>
+    </div>
+    <div class="pay-hint">
+      付款后截图 → 微信扫码联系客服 → 发送截图 → 24h内开通<br>
+      <span style="color:#f59e0b">👇 联系客服</span>
+    </div>
+    <div class="qr-item" style="margin-top:8px;">
+      <img src="/images/wx-contact.png" alt="微信客服" style="width:120px;height:120px;border-radius:8px;" onerror="this.style.display='none'">
+      <div class="qr-label">微信客服</div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function doLogin() {
+  const pwd = document.getElementById('pwd').value.trim();
+  const btn = document.getElementById('btn');
+  const err = document.getElementById('error');
+  if (!pwd) { err.textContent = '请输入密码'; return; }
+  btn.disabled = true; btn.textContent = '验证中...'; err.textContent = ''; err.style.color = '#ef4444';
+  try {
+    const resp = await fetch('/api/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd }),
+    });
+    const data = await resp.json();
+    if (resp.ok && data.success) {
+      err.style.color = '#22c55e'; err.textContent = '验证成功, 正在跳转...';
+      setTimeout(() => { window.location.href = '/'; }, 500);
+    } else {
+      err.textContent = data.error || '密码错误';
+      btn.disabled = false; btn.textContent = '验证进入';
+    }
+  } catch (e) {
+    err.textContent = '网络错误, 请刷新页面后重试';
+    btn.disabled = false; btn.textContent = '验证进入';
+  }
+}
+(async function checkAuth() {
+  try {
+    const resp = await fetch('/api/auth/status');
+    const data = await resp.json();
+    if (data.authenticated) { window.location.href = '/'; }
+  } catch(e) {}
+})();
+</script>
+</body>
+</html>

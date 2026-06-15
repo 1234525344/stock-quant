@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="1">
+    <builddir>cppcheck-cppcheck-build-dir</builddir>
+    <analyze-all-vs-configs>false</analyze-all-vs-configs>
+    <check-headers>true</check-headers>
+    <check-unused-templates>true</check-unused-templates>
+    <inline-suppression>true</inline-suppression>
+    <max-ctu-depth>2</max-ctu-depth>
+    <max-template-recursion>100</max-template-recursion>
+    <defines>
+        <define name="BOOST_SERIALIZATION_ASSUME_ABSTRACT"/>
+        <define name="TABLE_BIND6"/>
+        <define name="TABLE_BIND3"/>
+        <define name="HKU_ENABLE_INI_PARSER=1"/>
+        <define name="HKU_SUPPORT_DATETIME=1"/>
+        <define name="HKU_ENABLE_HTTP_CLIENT=1"/>
+    </defines>
+    <undefines>
+        <undefine>int64_t</undefine>
+        <undefine>int32_t</undefine>
+        <undefine>uint64_t</undefine>
+        <undefine>uint32_t</undefine>
+        <undefine>uint8_t</undefine>
+        <undefine>int8_t</undefine>
+        <undefine>TABLE_BIND4</undefine>
+    </undefines>
+    <paths>
+        <dir name="hikyuu_cpp/hikyuu"/>
+        <dir name="hikyuu_cpp/hikyuu_server"/>
+        <dir name="../hku_plugin/plugin_extind/src"/>
+        <dir name="../hku_plugin/plugin_backtest/src"/>
+        <dir name="../hku_plugin/lic"/>
+        <dir name="../hku_plugin/plugin_dataserver/src"/>
+        <dir name="../hku_plugin/plugin_device/src"/>
+        <dir name="../hku_plugin/plugin_import2hdf5/src"/>
+        <dir name="../hku_plugin/plugin_hkuextra/src"/>
+        <dir name="../hku_plugin/plugin_clickhouse/src"/>
+        <dir name="../hku_plugin/plugin_tmreport/src"/>
+        <dir name="../hku_plugin/plugin_checkdata/src"/>
+        <dir name="../hku_plugin/plugin_import2ch/src"/>
+        <dir name="../hku_plugin/plugin_import2mysql/src"/>
+        <dir name="../hku_plugin/python_extra"/>
+        <dir name="../hku_plugin/plugin_dataserver_parquet/src"/>
+        <dir name="../hku_plugin/plugin_device/src"/>
+    </paths>
+    <suppressions>
+        <suppression>unusedFunction</suppression>
+        <suppression>useStlAlgorithm</suppression>
+        <suppression>cstyleCast</suppression>
+        <suppression>unknownMacro</suppression>
+        <suppression>missingIncludeSystem</suppression>
+        <suppression>missingInclude</suppression>
+        <suppression>syntaxError</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/string_view.h">noExplicitConstr</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/datetime/Datetime.cpp">shadowFunction</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/datetime/TimeDelta.cpp">shadowFunction</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/datetime/TimeDelta.cpp">knownConditionTrueFalse</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/datetime/TimeDelta.cpp">knownConditionTrueFalse</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/datetime/TimeDelta.cpp">knownArgument</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/datetime/TimeDelta.cpp" lineNumber="209">uninitvar</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/datetime/TimeDelta.cpp" lineNumber="209">AssignmentAddressToInteger</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/db_connect/DBUpgrade.cpp" lineNumber="65">unreadVariable</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/db_connect/DBUpgrade.cpp" lineNumber="85">unreadVariable</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/db_connect/DBUpgrade.cpp" lineNumber="167">unreadVariable</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/db_connect/DBUpgrade.cpp" lineNumber="187">unreadVariable</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/db_connect/DBUpgrade.cpp" lineNumber="67">knownConditionTrueFalse</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/db_connect/DBUpgrade.cpp" lineNumber="77">knownConditionTrueFalse</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/db_connect/DBUpgrade.cpp" lineNumber="169">knownConditionTrueFalse</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/db_connect/DBUpgrade.cpp" lineNumber="179">knownConditionTrueFalse</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/db_connect/sqlite/AsyncSQLiteConnect.cpp" lineNumber="20">constParameterCallback</suppression>
+        <suppression fileName="hikyuu_cpp/hikyuu/utilities/db_connect/sqlite/SQLiteConnect.cpp" lineNumber="19">constParameterCallback</suppression>
+    </suppressions>
+    <check-level-exhaustive/>
+    <project-name>hikyuu</project-name>
+</project>

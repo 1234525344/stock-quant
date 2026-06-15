@@ -334,5 +334,119 @@ $("#btnRisk")?.addEventListener("click", async () => {
   finally { btn.textContent = "分析风险"; btn.disabled = false; }
 });
 
+// ============ ML 模型面板 ============
+let chartMLIC, chartMLBar;
+let mlModelsData = [];
+
+async function loadMLModels() {
+  try {
+    const data = await fetch("/api/ml/models").then(r => r.json());
+    mlModelsData = Array.isArray(data) ? data : [];
+    const sel = $("#mlModelSelect");
+    sel.innerHTML = mlModelsData.length
+      ? mlModelsData.map(m => `<option value="${m.model_name}">${m.model_name} (IC: ${m.IC_mean?.toFixed(4)})</option>`).join("")
+      : '<option value="">无模型</option>';
+    if (mlModelsData.length) renderMLModel(mlModelsData[0].model_name);
+  } catch (e) { console.error("ML models load error:", e); }
+}
+
+async function renderMLModel(modelName) {
+  if (!modelName) return;
+  try {
+    const meta = await fetch(`/api/ml/models/${modelName}`).then(r => r.json());
+    if (!chartMLIC) chartMLIC = echarts.init($("#chartMLIC"));
+    if (!chartMLBar) chartMLBar = echarts.init($("#chartMLBar"));
+
+    // IC metrics as gauge cards
+    const metrics = [
+      { label: "IC_mean", value: meta.IC_mean?.toFixed(4), tip: "预测值 vs 收益的相关系数" },
+      { label: "ICIR", value: meta.ICIR?.toFixed(4), tip: "IC均值/IC标准差" },
+      { label: "Rank_IC", value: meta.Rank_IC_mean?.toFixed(4), tip: "排名IC（更稳健）" },
+      { label: "Rank_ICIR", value: meta.Rank_ICIR?.toFixed(4), tip: "排名IC稳定性" },
+      { label: "训练耗时", value: meta.train_time_s + "s", tip: "模型训练耗时" },
+      { label: "测试天数", value: meta.n_days, tip: "回测覆盖的交易日数" },
+    ];
+    $("#mlMetrics").innerHTML = metrics.map(m =>
+      `<div class="risk-metric" title="${m.tip}">
+        <span class="rm-label">${m.label}</span>
+        <span class="rm-value" style="color:${parseFloat(m.value) > 0 ? '#34d399' : '#f87171'}">${m.value}</span>
+      </div>`
+    ).join("");
+
+    // IC bar chart
+    chartMLBar.setOption({
+      title: { text: "ML 模型指标", textStyle: { color: "#c8cdf0", fontSize: 13 } },
+      tooltip: {}, grid: { left: 80, right: 20, top: 40, bottom: 30 },
+      xAxis: { type: "value", axisLabel: { color: "#8890b5" } },
+      yAxis: { type: "category",
+        data: ["Rank_ICIR", "ICIR", "Rank_IC", "IC"],
+        axisLabel: { color: "#8890b5" } },
+      series: [{
+        type: "bar",
+        data: [
+          { value: meta.Rank_ICIR || 0, itemStyle: { color: meta.Rank_ICIR > 0.5 ? "#34d399" : "#fbbf24" } },
+          { value: meta.ICIR || 0, itemStyle: { color: meta.ICIR > 0.4 ? "#34d399" : "#fbbf24" } },
+          { value: meta.Rank_IC_mean || 0, itemStyle: { color: meta.Rank_IC_mean > 0.05 ? "#34d399" : "#fbbf24" } },
+          { value: meta.IC_mean || 0, itemStyle: { color: meta.IC_mean > 0.03 ? "#34d399" : "#fbbf24" } },
+        ],
+        label: { show: true, position: "right", color: "#8890b5", formatter: p => p.value.toFixed(4) },
+      }],
+    });
+
+    // Data info
+    chartMLIC.setOption({
+      title: { text: "数据集", textStyle: { color: "#c8cdf0", fontSize: 13 } },
+      tooltip: {}, grid: { left: 80, right: 20, top: 40, bottom: 30 },
+      xAxis: { type: "value", axisLabel: { color: "#8890b5" } },
+      yAxis: { type: "category",
+        data: ["测试集", "验证集", "训练集"],
+        axisLabel: { color: "#8890b5" } },
+      series: [{
+        type: "bar",
+        data: [
+          { value: meta.shapes?.test?.[0] || 0, itemStyle: { color: "#818cf8" } },
+          { value: meta.shapes?.valid?.[0] || 0, itemStyle: { color: "#6366f1" } },
+          { value: meta.shapes?.train?.[0] || 0, itemStyle: { color: "#4f46e5" } },
+        ],
+        label: { show: true, position: "right", color: "#8890b5", formatter: p => (p.value/10000).toFixed(0) + "万行" },
+      }],
+    });
+  } catch (e) { console.error("ML render error:", e); }
+}
+
+// Train button
+$("#btnMLTrain").addEventListener("click", async () => {
+  const status = $("#mlTrainStatus");
+  status.style.display = "block";
+  status.textContent = "训练中...（约需2-3分钟，请耐心等待）";
+  $("#btnMLTrain").disabled = true;
+
+  try {
+    const res = await fetch("/api/ml/train", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ market: "csi300", modelType: "lgb" }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    status.textContent = `训练完成！IC_mean=${data.IC_mean?.toFixed(4)}, ICIR=${data.ICIR?.toFixed(4)}`;
+    loadMLModels();
+  } catch (e) {
+    status.textContent = "训练失败: " + e.message;
+    status.style.color = "#f87171";
+  } finally {
+    $("#btnMLTrain").disabled = false;
+  }
+});
+
+// Model selector change
+$("#mlModelSelect").addEventListener("change", function() {
+  renderMLModel(this.value);
+});
+
+// Refresh button
+$("#btnMLRefresh").addEventListener("click", loadMLModels);
+
 // ============ 启动 ============
 loadFactors();
+loadMLModels();

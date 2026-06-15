@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理面板 — 量化平台</title>
+<style>
+:root { --bg: #0a0e27; --card: #111827; --border: #1f2937; --text: #e0e6ed; --muted: #6b7280; --green: #22c55e; --red: #ef4444; --blue: #60a5fa; --gold: #f59e0b; --purple: #a78bfa; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg); color: var(--text); min-height: 100vh;
+}
+.topbar {
+  background: #0d1117; border-bottom: 1px solid var(--border);
+  padding: 12px 24px; display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+.topbar h1 { font-size: 16px; color: var(--blue); }
+.topbar a { color: var(--blue); text-decoration: none; font-size: 12px; }
+.topbar a:hover { text-decoration: underline; }
+.main { max-width: 960px; margin: 0 auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+.panel {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px;
+}
+.panel h2 { font-size: 14px; color: var(--muted); font-weight: normal; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.metric { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 14px; text-align: center; }
+.metric .val { font-size: 22px; font-weight: bold; }
+.metric .lbl { font-size: 11px; color: var(--muted); margin-top: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; padding: 8px 10px; color: var(--muted); font-weight: normal; border-bottom: 1px solid var(--border); font-size: 11px; }
+td { padding: 8px 10px; border-bottom: 1px solid #111820; }
+tr:hover td { background: rgba(96,165,250,.03); }
+.btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; transition: .2s; }
+.btn-primary { background: var(--blue); color: #000; }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn:hover { opacity: .85; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+input, select { padding: 8px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; font-family: inherit; outline: none; }
+input:focus { border-color: var(--blue); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.gap { gap: 8px; }
+.mt { margin-top: 12px; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+.tag-green { background: rgba(34,197,94,.12); color: var(--green); }
+.tag-red { background: rgba(239,68,68,.12); color: var(--red); }
+.tag-blue { background: rgba(96,165,250,.12); color: var(--blue); }
+.mono { font-family: 'Consolas', monospace; font-size: 12px; }
+#toast { position: fixed; top: 20px; right: 20px; z-index: 999; padding: 12px 20px; border-radius: 8px; font-size: 13px; display: none; }
+#toast.ok { background: rgba(34,197,94,.15); color: var(--green); border: 1px solid rgba(34,197,94,.3); }
+#toast.err { background: rgba(239,68,68,.15); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>⚙️ 管理面板</h1>
+  <div style="display:flex;gap:16px;align-items:center;">
+    <span style="font-size:11px;color:var(--muted);" id="authStatus">检查登录...</span>
+    <a href="/">← 主站</a>
+  </div>
+</div>
+
+<div class="main">
+  <!-- 系统状态 -->
+  <div class="panel">
+    <h2>📊 系统状态</h2>
+    <div class="grid2" id="sysGrid">
+      <div class="metric"><div class="lbl">状态</div><div class="val" id="sysStatus">加载中...</div></div>
+      <div class="metric"><div class="lbl">运行时间</div><div class="val" id="sysUptime">-</div></div>
+      <div class="metric"><div class="lbl">内存使用</div><div class="val" id="sysMem">-</div></div>
+      <div class="metric"><div class="lbl">WebSocket</div><div class="val" id="sysWS">-</div></div>
+    </div>
+  </div>
+
+  <!-- 数据库概览 -->
+  <div class="panel">
+    <h2>🗄️ 数据库概览</h2>
+    <div class="grid2" id="dbGrid">
+      <div class="metric"><div class="lbl">交易记录</div><div class="val blue" id="dbTrades">-</div></div>
+      <div class="metric"><div class="lbl">每日快照</div><div class="val blue" id="dbSnapshots">-</div></div>
+      <div class="metric"><div class="lbl">策略配置</div><div class="val blue" id="dbStrategies">-</div></div>
+      <div class="metric"><div class="lbl">告警记录</div><div class="val blue" id="dbAlerts">-</div></div>
+    </div>
+  </div>
+
+  <!-- API Key 管理 -->
+  <div class="panel">
+    <h2>🔑 API Key 管理</h2>
+    <div class="row gap">
+      <select id="keyPlan">
+        <option value="monthly">月付 (monthly)</option>
+        <option value="yearly">年付 (yearly)</option>
+        <option value="trial">试用 (trial)</option>
+      </select>
+      <input type="text" id="keyNote" placeholder="备注 (可选)" style="width:160px;" />
+      <button class="btn btn-primary" id="btnCreateKey">生成 Key</button>
+    </div>
+    <div class="mt" style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Key</th><th>方案</th><th>备注</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+        <tbody id="keyTableBody"><tr><td colspan="6" style="color:var(--muted);">加载中...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 登录凭证 -->
+  <div class="panel" id="pwdPanel">
+    <h2>🔐 访问密码</h2>
+    <div class="row gap" id="pwdContent">
+      <span style="color:var(--muted);font-size:12px;">正在加载...</span>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+
+function toast(msg, ok) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.className = ok ? 'ok' : 'err';
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 2500);
+}
+
+// 检查登录
+fetch('/api/auth/status').then(r => r.json()).then(d => {
+  $('#authStatus').innerHTML = d.authenticated
+    ? '<span style="color:#22c55e;">● 已认证</span>'
+    : '<span style="color:#ef4444;">● 未登录</span>';
+});
+
+// 系统状态
+async function loadHealth() {
+  try {
+    const r = await fetch('/api/health');
+    const d = await r.json();
+    $('#sysStatus').textContent = d.status === 'ok' ? '正常' : '异常';
+    $('#sysStatus').className = 'val ' + (d.status === 'ok' ? 'green' : 'red');
+    $('#sysUptime').textContent = fmtUptime(d.uptime);
+    $('#sysMem').textContent = (d.memory ? d.memory.heapUsed : '-');
+    $('#sysWS').textContent = (d.components && d.components.websocket === 'ok' ? '已连接' : '未连接');
+    $('#sysWS').className = 'val ' + (d.components && d.components.websocket === 'ok' ? 'green' : 'red');
+  } catch(e) {}
+}
+
+// 数据库统计
+async function loadDB() {
+  try {
+    const r = await fetch('/api/db/stats');
+    const d = await r.json();
+    $('#dbTrades').textContent = (d.trades || 0).toLocaleString();
+    $('#dbSnapshots').textContent = (d.daily_snapshots || 0).toLocaleString();
+    $('#dbStrategies').textContent = (d.strategies || 0).toLocaleString();
+    $('#dbAlerts').textContent = (d.alerts || 0).toLocaleString();
+  } catch(e) {}
+}
+
+// API Keys
+async function loadKeys() {
+  try {
+    const r = await fetch('/api/admin/keys');
+    const d = await r.json();
+    const keys = d.keys || [];
+    let html = keys.map(k => `
+      <tr>
+        <td class="mono">${k.key.slice(0,16)}…</td>
+        <td><span class="tag tag-blue">${k.plan || '-'}</span></td>
+        <td>${k.note || '-'}</td>
+        <td>${k.disabled ? '<span class="tag tag-red">已禁用</span>' : '<span class="tag tag-green">启用</span>'}</td>
+        <td style="font-size:11px;color:var(--muted);">${k.createdAt || k.created_at || '-'}</td>
+        <td>${k.disabled ? '' : `<button class="btn btn-danger" onclick="disableKey('${k.key}')" style="padding:3px 10px;font-size:11px;">禁用</button>`}</td>
+      </tr>
+    `).join('');
+    if (!html) html = '<tr><td colspan="6" style="color:var(--muted);">暂无 Key</td></tr>';
+    $('#keyTableBody').innerHTML = html;
+  } catch(e) { toast('加载 Key 失败', false); }
+}
+
+async function disableKey(k) {
+  try {
+    await fetch(`/api/admin/keys/${k}`, { method: 'DELETE' });
+    toast('已禁用', true);
+    loadKeys();
+  } catch(e) { toast('操作失败', false); }
+}
+
+$('#btnCreateKey').addEventListener('click', async () => {
+  const btn = $('#btnCreateKey');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/admin/keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: $('#keyPlan').value, note: $('#keyNote').value }),
+    });
+    if (!r.ok) { toast('创建失败', false); return; }
+    const d = await r.json();
+    toast('Key 已创建: ' + d.key.slice(0,20) + '… <br><button onclick="navigator.clipboard.writeText(\'' + d.key + '\')" style="margin-top:4px;padding:4px 12px;background:#f59e0b;color:#000;border:none;border-radius:4px;cursor:pointer;font-size:11px;">📋 复制完整 Key</button>', true);
+    $('#keyNote').value = '';
+    loadKeys();
+  } catch(e) { toast('创建失败', false); }
+  btn.disabled = false;
+});
+
+// 密码
+async function loadPwd() {
+  try {
+    const r = await fetch('/api/auth/password');
+    const d = await r.json();
+    $('#pwdContent').innerHTML = `
+      <span style="color:var(--muted);font-size:12px;">本月密码:</span>
+      <code class="mono" style="color:var(--gold);background:rgba(245,158,11,.08);padding:6px 12px;border-radius:6px;user-select:all;">${d.currentPassword || '-'}</code>
+      <span style="font-size:11px;color:var(--muted);">下次更换: ${d.nextChange || '-'} (${d.daysLeft || '?'}天后)</span>
+    `;
+  } catch(e) {
+    $('#pwdContent').innerHTML = '<span style="color:var(--muted);font-size:12px;">仅限本地查看</span>';
+  }
+}
+
+function fmtUptime(s) {
+  if (!s) return '-';
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}天 ${h}时 ${m}分`;
+  if (h > 0) return `${h}时 ${m}分`;
+  return `${m}分 ${Math.floor(s % 60)}秒`;
+}
+
+// 初始加载
+loadHealth();
+loadDB();
+loadKeys();
+loadPwd();
+// 定期刷新
+setInterval(() => { loadHealth(); loadDB(); }, 30000);
+</script>
+</body>
+</html>

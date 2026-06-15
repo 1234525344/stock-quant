@@ -12,6 +12,7 @@ const {
   getFundFlow,
   getMarginTrade,
   getMarketBreadth,
+  nativeHttpsGet,
 } = require("../data");
 
 // ── 指数 / 板块 ──
@@ -25,7 +26,7 @@ const {
 } = require("../index");
 
 // ── 技术指标 ──
-const { SMA, MACD, RSI, KDJ, BOLL } = require("../indicators");
+const { SMA, MACD, RSI, KDJ, BOLL, OBV, SAR } = require("../indicators");
 
 // ── TDX ──
 const { getTDXRoot, getTDXSnapshot } = require("../tdx-reader");
@@ -246,7 +247,7 @@ router.get("/api/kline/enhanced", asyncHandler(async (req, res) => {
 // 技术指标
 // ═══════════════════════════════════════════════════════════
 
-router.get("/api/indicators", asyncHandler(async (req, res) => {
+router.get("/api/indicators", cacheMiddleware(15000), asyncHandler(async (req, res) => {
     const { code, days } = req.query;
     if (!code) return res.status(400).json({ error: "需要股票代码" });
     const klines = await getKlineData(code, +days || 250);
@@ -267,6 +268,8 @@ router.get("/api/indicators", asyncHandler(async (req, res) => {
     const rsi14 = RSI(closes, 14);
     const { k, d, j } = KDJ(highs, lows, closes);
     const { mid, upper, lower } = BOLL(closes);
+    const obv = OBV(closes, volumes);
+    const sar = SAR(highs, lows);
 
     res.json({
       dates, opens, highs, lows, closes, volumes,
@@ -275,6 +278,8 @@ router.get("/api/indicators", asyncHandler(async (req, res) => {
       rsi: rsi14,
       kdj: { k, d, j },
       boll: { mid, upper, lower },
+      obv,
+      sar,
     });
 }));
 
@@ -293,7 +298,7 @@ router.get("/api/stock/comments", asyncHandler(async (req, res) => {
 // 增强个股分析
 // ═══════════════════════════════════════════════════════════
 
-router.get("/api/stock/analysis/:code", asyncHandler(async (req, res) => {
+router.get("/api/stock/analysis/:code", cacheMiddleware(10000), asyncHandler(async (req, res) => {
   const { code } = req.params;
 
   const [analysisResp, quote, indexKlines] = await Promise.all([
@@ -398,11 +403,40 @@ router.get("/api/market/sectors", cacheHeaders(60), async (req, res) => {
 // 市场综述
 // ═══════════════════════════════════════════════════════════
 
-router.get("/api/market/summary", asyncHandler(async (req, res) => {
-    const [indices, sectors, sectorFlow] = await Promise.all([
+// 获取市场整体资金流向 (沪深两市汇总) - 带缓存避免限流
+let _marketFlowCache = { data: null, time: 0 };
+async function getMarketFundFlowSummary() {
+  // 缓存60秒，避免频繁请求被限流
+  if (_marketFlowCache.data && Date.now() - _marketFlowCache.time < 60000) {
+    return _marketFlowCache.data;
+  }
+  try {
+    const url = "https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&secids=1.000001,0.399001&fields=f62,f184,f66,f69,f72,f75";
+    const resp = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://data.eastmoney.com" },
+      signal: AbortSignal.timeout(8000),
+    });
+    const data = await resp.json();
+    if (!data?.data?.diff) return _marketFlowCache.data;
+    const diff = data.data.diff;
+    let totalMainNet = 0;
+    for (const d of diff) {
+      totalMainNet += d.f62 || 0;
+    }
+    const result = { totalMainNet, mainPct: diff[0]?.f184 || 0 };
+    _marketFlowCache = { data: result, time: Date.now() };
+    return result;
+  } catch (e) {
+    return _marketFlowCache.data;
+  }
+}
+
+router.get("/api/market/summary", cacheMiddleware(30000), asyncHandler(async (req, res) => {
+    const [indices, sectors, sectorFlow, marketFlow] = await Promise.all([
       getIndexQuotes().catch(() => []),
       getSectorPerformance().catch(() => []),
       getSectorFlow().catch(() => []),
+      getMarketFundFlowSummary().catch(() => null),
     ]);
 
     // 判断市场整体状态
@@ -421,6 +455,8 @@ router.get("/api/market/summary", asyncHandler(async (req, res) => {
     // ===== 市场资金流向 =====
     let totalMainNet = 0, totalAmount = 0;
     let inflowSectors = 0, outflowSectors = 0;
+
+    // 用板块数据累加
     if (sectorFlow && sectorFlow.length > 0) {
       for (const sf of sectorFlow) {
         totalMainNet += sf.mainNet || 0;
@@ -430,22 +466,22 @@ router.get("/api/market/summary", asyncHandler(async (req, res) => {
       }
     }
 
-    // 资金流向判断
+    // 资金流向判断 (阈值适配: 10个板块约-20亿为大幅流出)
     let flowStatus, flowLabel, flowWarning;
     const flowRatio = totalAmount > 0 ? totalMainNet / totalAmount : 0;
-    if (totalMainNet < -5e9) {
+    if (totalMainNet < -10e8) {
       flowStatus = "major_outflow";
       flowLabel = "大资金出逃";
       flowWarning = "⚠️ 市场主力资金大幅流出，注意风险控制。建议降低仓位，规避高位个股，等待资金回流信号。";
-    } else if (totalMainNet < -1e9) {
+    } else if (totalMainNet < -3e8) {
       flowStatus = "outflow";
       flowLabel = "资金持续流出";
       flowWarning = "市场资金整体呈流出态势，热门板块缺乏持续性。建议精选个股，控制仓位。";
-    } else if (totalMainNet > 5e9) {
+    } else if (totalMainNet > 10e8) {
       flowStatus = "major_inflow";
       flowLabel = "大资金入场";
       flowWarning = "🔥 主力资金大幅流入，市场做多意愿强烈。可积极关注资金持续流入的板块和个股。";
-    } else if (totalMainNet > 1e9) {
+    } else if (totalMainNet > 3e8) {
       flowStatus = "inflow";
       flowLabel = "资金流入";
       flowWarning = "资金温和流入，市场氛围偏暖。可适度参与资金关注度高的板块。";
@@ -512,7 +548,7 @@ router.get("/api/margin", asyncHandler(async (req, res) => {
     res.json({ code, data });
 }));
 
-router.get("/api/market/breadth", asyncHandler(async (req, res) => {
+router.get("/api/market/breadth", cacheMiddleware(30000), asyncHandler(async (req, res) => {
     const breadth = await getMarketBreadth();
     res.json(breadth || { error: "数据获取失败" });
 }));

@@ -1,0 +1,651 @@
+#!/usr/bin/python
+# -*- coding: utf8 -*-
+# cp936
+
+import atexit
+import time
+import locale
+from pathlib import Path
+import pickle
+import traceback
+__copyright__ = """
+Apache License Version 2.0
+
+Copyright (c) 2010-2017 fasiondog
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
+import sys
+import os
+BASE_DIR = os.path.dirname(__file__)
+
+
+if sys.platform == 'win32':
+    # add_dll_directory() 有时不生效
+    os.add_dll_directory(os.path.join(os.path.dirname(__file__), 'cpp'))
+    # 添加动态库所在的目录路径
+    current_path = os.environ.get('PATH', '')
+    dll_directory = os.path.join(BASE_DIR, 'cpp')
+    new_path = f"{dll_directory};{current_path}"
+    os.environ['PATH'] = new_path
+else:
+    current_path = os.environ.get('LD_LIBRARY_PATH', '')
+    dll_directory = os.path.join(BASE_DIR, 'cpp')
+    new_path = f"{dll_directory}:{current_path}" if current_path else dll_directory
+    os.environ['LD_LIBRARY_PATH'] = new_path
+
+
+try:
+    from .util import *
+    from .extend import *
+    from .indicator import *
+    from .trade_manage import *
+    from .trade_sys import *
+    from .analysis import *
+    from .hub import *
+    from .draw import *
+except Exception as e:
+    info = sys.exc_info()
+    # hku_fatal("{}: {}".format(info[0].__name__, info[1]))
+    # hku_fatal(traceback.format_exc())
+    print("{}: {}".format(info[0].__name__, info[1]))
+    print(traceback.format_exc())
+    print("""请使用 pipdeptree -p hikyuu 检查是否存在缺失的依赖包。
+如果没有问题可以在 https://gitee.com/fasiondog/hikyuu 或 https://github.com/fasiondog/hikyuu
+上提交 issue，同时附上 "用户目录/.hikyuu" 下的 hikyuu_py.log 和 hikyuu.log 日志文件 """)
+    raise e
+
+
+__version__ = get_version()
+
+
+sm = StockManager.instance()
+
+
+def hku_cleanup():
+    # macosx 中clickhouse必须在python中等待退出，其他平台无问题
+    local_sm = StockManager.instance()
+    local_sm.cancel_load()
+    while not local_sm.data_ready:
+        time.sleep(0.1)
+
+    # 释放所有K线数据, 用于防止python实现的扩展K线转换函数由于GIL导致退出时异常
+    release_extra_ktype()
+
+
+atexit.register(hku_cleanup)
+
+
+# 尝试寻找 hikyuu_plugin python包，并获取其所在目录
+try:
+    import hikyuu_plugin
+    plugin_path = os.path.dirname(hikyuu_plugin.__file__)
+    plugin_version = hikyuu_plugin.__version__
+
+    # 获取主版本号（格式为x.x.x）
+    def get_major_version(version_str):
+        parts = version_str.split('.')
+        return '.'.join(parts[:3]) if len(parts) >= 3 else version_str
+
+    # 比较hikyuu和hikyuu_plugin的版本号
+    hikyuu_major_version = get_major_version(__version__)
+    plugin_major_version = get_major_version(plugin_version)
+
+    if hikyuu_major_version != plugin_major_version:
+        hku_warn("hikyuu版本 ({}) 与 hikyuu_plugin版本 ({}) 不匹配，请确保使用兼容版本！".format(__version__, plugin_version))
+
+except ImportError:
+    plugin_path = Path.home() / '.hikyuu' / 'plugin'
+    if plugin_path.exists():
+        plugin_path = str(plugin_path)
+    else:
+        plugin_path = os.path.join(os.path.dirname(__file__), 'plugin')
+
+try:
+    from hikyuu_plugin_private import *
+except ImportError:
+    pass
+
+
+sm.set_plugin_path(plugin_path)
+# print(f"current plugin path: {plugin_path}")
+
+sm.set_language_path(f'{BASE_DIR}/cpp/i18n')
+
+
+class iodog:
+    # Only for compatibility with old code
+    @staticmethod
+    def open():
+        open_ostream_to_python()
+
+    @staticmethod
+    def close():
+        close_ostream_to_python()
+
+
+if in_interactive_session():
+    hku_info("runing in interactive session")
+    set_python_in_interactive(True)
+
+
+# 如果是在 jupyter 环境中运行，重定向C++ stdout/stderr输出至python
+if in_ipython_frontend():
+    set_python_in_jupyter(True)
+    hku_info("running in jupyter")
+    iodog.open()
+
+# windows 终端下执行无法正常显示 c++ 输出中文
+if sys.platform == 'win32' and not in_ipython_frontend():
+    lang, _ = locale.getdefaultlocale()
+    if lang and 'zh' in lang.lower():
+        os.system('chcp 65001 > nul')
+
+use_draw_engine('matplotlib')
+
+
+def hku_save(var, filename):
+    """
+    序列化，将hikyuu内建类型的变量（如Stock、TradeManager等）保存在指定的文件中，格式为二进制。
+
+    :param var: hikyuu内建类型的变量
+    :param str filename: 指定的文件名
+    """
+    with open(filename, 'wb') as f:
+        pickle.dump(var, f)
+
+
+def hku_load(filename):
+    """
+    将通过 hku_save 保存的变量，读取到var中。
+
+    :param str filename: 待载入的序列化文件。
+    :return: 之前被序列化保存的文件
+    """
+    with open(filename, 'rb') as f:
+        out = pickle.load(f)
+    return out
+
+
+def set_global_context(stk, query):
+    """
+    设置全局的 K 线上下文
+
+    :param Stock stk: 指定的全局Stock
+    :param Query query: 指定的查询条件
+    """
+    global K, O, C, H, L, A, V
+    K = stk.get_kdata(query)
+    O.set_context(K)
+    C.set_context(K)
+    H.set_context(K)
+    L.set_context(K)
+    A.set_context(K)
+    V.set_context(K)
+
+
+def get_global_context():
+    """
+    获取当前的全局 K 线上下文
+
+    :rtype: KData
+    """
+    return C.getContext()
+
+
+# 预定义block变量的只有load_hikyuu后，才会生效
+blocka = None  # 全部A股
+blocka_shsz = None  # 沪深A股
+zsbk_a = None  # 指数板块A股
+blocksh = None  # 全部沪市
+zsbk_sh = None  # 指数板块上证
+blocksz = None
+zsbk_sz = None
+blockbj = None
+zsbk_bj = None
+blockg = None
+zsbk_cyb = None
+blockstart = None
+blockzxb = None
+zsbk_zxb = None
+zsbk_sh50 = None
+zsbk_sh180 = None
+zsbk_hs300 = None
+zsbk_zz100 = None
+blocketf = None
+
+
+def load_hikyuu(**kwargs):
+    """
+    初始化加载 hikyuu 数据库，并初始化全局变量。
+
+    示例:
+
+    # 仅预加载 sh000001 日线数据，关闭行情接收
+    options = {
+        "stock_list": ["sh000001"],
+        "ktype_list": ["day"],
+        "preload_num": {"day_max": 100000},
+        "load_history_finance": False,
+        "load_weight": False,
+        "start_spot": False,
+        "spot_worker_num": 1,
+        "reload_time": "00:00",
+        "lazy_preload": False,
+    }
+    load_hikyuu(**options)
+
+    参数:
+        config_file (str): 配置文件路径，默认为 ~/.hikyuu/hikyuu.ini
+
+        stock_list (list): 指定加载的股票列表，默认为全部A股('all'), 如：['sh000001', 'sz399001']
+        ktype_list (list): 指定加载的K线类型列表，默认按配置文件设置加载. 如: ['day', 'week', 'month']
+                    支持的K线类型有:
+                    'day', 'week', 'month', 'quarter', 'halfyear', 'year', 'min', 'min5',
+                    'min15', 'min30', 'min60', 'hour2', 'timeline', 'trans'
+        preload_num (dict): {'day_max': 100000, 'week_max': 100000, 'month_max': 100000, ...}
+        load_history_finance (boolean): 预加载历史财务数至内存，默认为 True
+        load_weight (boolean): 加载权息数据，默认为 True
+
+        start_spot (boolean): 启动行情接收，默认为 True
+        spot_worker_num (int): 行情接收数据处理线程数，默认为 1
+        reload_time (str): 指定数据重新加载时间(时:分)，格式为 HH:MM, 默认为 00:00
+        lazy_preload (boolean): 日线以下使用懒加载方式进行预加载，默认为 False
+    """
+    if 'config_file' in kwargs:
+        config_file = kwargs['config_file']
+        if not os.path.exists(config_file):
+            hku_fatal("配置文件不存在: {}".format(config_file))
+            return
+    else:
+        from .data.hku_config_template import generate_default_config
+        config_file = os.path.expanduser('~') + "/.hikyuu/hikyuu.ini"
+        if not os.path.exists(config_file):
+            # 创建默认配置
+            hku_info("创建默认配置文件")
+            generate_default_config()
+
+    import configparser
+    ini = configparser.ConfigParser()
+    ini.read(config_file, encoding='utf-8')
+    hku_param = Parameter()
+    hku_param["tmpdir"] = ini.get('hikyuu', 'tmpdir')
+    hku_param["datadir"] = ini.get('hikyuu', 'datadir')
+    if ini.has_option('hikyuu', 'quotation_server'):
+        hku_param["quotation_server"] = ini['hikyuu']['quotation_server']
+    hku_param["load_history_finance"] = ini.getboolean("hikyuu", "load_history_finance", fallback=True)
+    hku_param["load_stock_weight"] = ini.getboolean("hikyuu", "load_stock_weight", fallback=True)
+    if ini.has_option('hikyuu', 'plugindir'):
+        hku_param["plugindir"] = ini.get('hikyuu', 'plugindir')
+    else:
+        hku_param["plugindir"] = os.path.join(os.path.dirname(__file__), "plugin")
+    hku_param["reload_time"] = ini.get('hikyuu', 'reload_time', fallback="00:00")
+    hku_param["lazy_preload"] = ini.getboolean("hikyuu", "lazy_preload", fallback=False)
+
+    base_param = Parameter()
+    base_info_config = ini.options('baseinfo')
+    for p in base_info_config:
+        base_param[p] = ini.get('baseinfo', p)
+
+    block_param = Parameter()
+    block_config = ini.options('block')
+    for p in block_config:
+        block_param[p] = ini.get('block', p)
+
+    preload_param = Parameter()
+    preload_config = ini.options('preload')
+    for p in preload_config:
+        if p in ('day', 'week', 'month', 'quarter', 'halfyear', 'year', 'min', 'min5', 'min15', 'min30', 'min60', 'hour2', 'timeline', 'trans'):
+            preload_param[p] = ini.getboolean('preload', p)
+        else:
+            preload_param[p] = ini.getint('preload', p)
+
+    kdata_param = Parameter()
+    kdata_config = ini.options('kdata')
+    for p in kdata_config:
+        if p == "convert":
+            kdata_param[p] = ini.getboolean('kdata', p)
+            continue
+        kdata_param[p] = ini.get('kdata', p)
+
+    context = StrategyContext(["all"])
+    # 兼容原有通过环境变量设置加载选项的方式（优先级低）
+    if 'HKU_STOCK_LIST' in os.environ:
+        context.stock_list = os.environ['HKU_STOCK_LIST'].split(";")
+    if 'HKU_KTYPE_LIST' in os.environ:
+        context.ktype_list = os.environ['HKU_KTYPE_LIST'].split(";")
+    if 'HKU_LOAD_HISTORY_FINANCE' in os.environ:
+        load_str = os.environ['HKU_LOAD_HISTORY_FINANCE'].upper()
+        load_finance = load_str in ("1", "TRUE")
+        hku_param.set("load_history_finance", load_finance)
+    if 'HKU_LOAD_STOCK_WEIGHT' in os.environ:
+        load_str = os.environ['HKU_LOAD_STOCK_WEIGHT'].upper()
+        load_stk_weight = load_str in ("1", "TRUE")
+        hku_param.set("load_stock_weight", load_stk_weight)
+
+    # 优先使用传入参数作为加载上下文
+    if 'stock_list' in kwargs:
+        context.stock_list = kwargs['stock_list']
+    if 'ktype_list' in kwargs:
+        context.ktype_list = kwargs['ktype_list']
+    if 'preload_num' in kwargs:
+        context.preload_num = kwargs['preload_num']
+    if 'load_history_finance' in kwargs:
+        hku_param.set("load_history_finance", kwargs['load_history_finance'])
+    if 'load_weight' in kwargs:
+        hku_param.set("load_stock_weight", kwargs['load_weight'])
+
+    sm.init(base_param, block_param, kdata_param, preload_param, hku_param, context)
+
+    # 默认不启动行情接收, 防止启动在开盘后因自身合成缺失导致从 dataserver 获取行情也缺失
+    start_spot = False
+    if 'HKU_START_SPOT' in os.environ:
+        spot_str = os.environ['HKU_START_SPOT'].upper()
+        start_spot = spot_str in ('1', 'TRUE')
+    spot_worker_num = 1
+    if 'HKU_SPOT_WORKER_NUM' in os.environ:
+        spot_worker_num = int(os.environ['HKU_SPOT_WORKER_NUM'])
+
+    if 'start_spot' in kwargs:
+        start_spot = kwargs['start_spot']
+    if 'spot_worker_num' in kwargs:
+        spot_worker_num = kwargs['spot_worker_num']
+
+    # 启动行情接收代理
+    if start_spot:
+        start_spot_agent(False, spot_worker_num)
+
+    global blocka
+    global zsbk_a
+    global blocka_shsz
+    global blocksh
+    global zsbk_sh
+    global blocksz
+    global zsbk_sz
+    global blockbj
+    global zsbk_bj
+    global blockg
+    global zsbk_cyb
+    global blockstart
+    global blockzxb
+    global zsbk_zxb
+    global zsbk_sh50
+    global zsbk_sh180
+    global zsbk_hs300
+    global zsbk_zz100
+    global blocketf
+
+    blocka = sm.get_block("A", "ALL")  # 全A，含北交所
+    zsbk_a = blocka
+
+    blocka_shsz = sm.get_block("A", "沪深")
+
+    blocksh = sm.get_block("A", "SH")
+    zsbk_sh = blocksh
+
+    blocksz = sm.get_block("A", "SZ")
+    zsbk_sz = blocksz
+
+    blockbj = sm.get_block("A", "BJ")
+    zsbk_bj = blockbj
+
+    blockg = sm.get_block("G", "创业板")
+    zsbk_cyb = blockg
+
+    blockstart = sm.get_block("START", "科创板")
+
+    blockzxb = sm.get_block("A", "中小板")
+    zsbk_zxb = blockzxb
+
+    zsbk_sh50 = sm.get_block("指数板块", "上证50")
+    zsbk_sh180 = sm.get_block("指数板块", "上证180")
+    zsbk_hs300 = sm.get_block("指数板块", "沪深300")
+    zsbk_zz100 = sm.get_block("指数板块", "中证100")
+
+    blocketf = sm.get_block("ETF", "ALL")
+
+    set_global_context(sm['sh000001'], Query(-150))
+
+
+# ==============================================================================
+#
+# 设置关键类型简称
+#
+# ==============================================================================
+O = OPEN()
+C = CLOSE()
+H = HIGH()
+L = LOW()
+A = AMO()
+V = VOL()
+D = Datetime
+K = None
+Q = Query
+
+# ==============================================================================
+#
+# 粗略的选股函数
+#
+# ==============================================================================
+
+
+def select(cond, start=Datetime(201801010000), end=Datetime.now(), print_out=True):
+    """
+    示例：
+    #选出涨停股
+    C = CLOSE()
+    x = select(C / REF(C, 1) - 1 >= 0.0995)
+
+    :param Indicator cond: 条件指标
+    :param Datetime start: 起始日期
+    :param Datetime end: 结束日期
+    :param bool print_out: 打印选中的股票
+    :rtype: 选中的股票列表
+    """
+    q = Query(start, end)
+    d = sm.get_trading_calendar(q, 'SH')
+    if len(d) == 0:
+        return
+
+    result = []
+    for s in blocka:
+        if not s.valid:
+            continue
+
+        k = s.get_kdata(q)
+        if len(k) == 0 or k[-1].datetime != d[-1]:
+            continue
+
+        cond.set_context(k)
+        if len(cond) > 0 and not isnan(cond[-1]) and cond[-1] > 0:
+            result.append(s)
+            if print_out:
+                print(d[-1], s)
+
+    return result
+
+
+def select2(inds, start=Datetime(201801010000), end=Datetime.now(), stks=None):
+    """导出最后时刻指定证券的所有指定指标值
+
+    如：
+        select2([CLOSE(), VOLUME()], stks=blocka)
+
+    返回一个DataFrame, 列名是指标名称, 行是证券代码和证券名称:
+
+        证券代码  证券名称  CLOSE  VOLUME
+        SH600000 浦发银行  14.09   1000
+        SH600001 中国平安  13.09   2000
+        SZ000001 平安银行  13.09   3000
+        ...
+
+    :param Indicator inds: 指标列表
+    :param Datetime start: 起始日期
+    :param Datetime end: 结束日期（不包括该日期）
+    :param list stks: 指定的证券列表
+    :rtype: pandas.DataFrame
+    """
+    q = Query(start, end)
+    d = sm.get_trading_calendar(q, 'SH')
+    if len(d) == 0:
+        return
+
+    if stks is None:
+        stks = sm
+
+    ind_cols = {'证券代码': [], '证券名称': []}
+    for ind in inds:
+        ind_cols[ind.name] = []
+
+    for s in stks:
+        if not s.valid:
+            continue
+
+        k = s.get_kdata(q)
+        if len(k) == 0 or k[-1].datetime != d[-1]:
+            continue
+
+        ind_cols['证券代码'].append(s.market_code)
+        ind_cols['证券名称'].append(s.name)
+        for ind in inds:
+            x = ind(k)
+            ind_cols[ind.name].append(x[-1])
+
+    df = pd.DataFrame(ind_cols)
+    return df
+
+
+# ==============================================================================
+#
+# 增加临时的实时数据更新函数 realtime_update
+#
+# ==============================================================================
+
+
+def realtime_update_inner(source='qq', stk_list=None):
+    if stk_list is None:
+        stk_list = [s for s in sm if s.valid and s.type in (
+            constant.STOCKTYPE_A, constant.STOCKTYPE_INDEX, constant.STOCKTYPE_ETF,
+            constant.STOCKTYPE_GEM, constant.STOCKTYPE_START, constant.STOCKTYPE_A_BJ)]
+
+    if source == 'qq':
+        from hikyuu.fetcher.stock.zh_stock_a_sina_qq import get_spot
+        stk_list = [s.market_code.lower() for s in stk_list]
+        records = get_spot(stk_list, 'qq')
+    elif source == 'qmt':
+        from hikyuu.fetcher.stock.zh_stock_a_qmt import get_spot
+        records = get_spot(stk_list)
+    else:
+        hku_error(f'Not support website source: {source}!')
+        return
+
+    for r in records:
+        stk = sm[f'{r["market"]}{r["code"]}']
+        if stk.is_null():
+            continue
+        k = KRecord()
+        k.datetime = Datetime(r['datetime']).start_of_day()
+        k.open = r['open']
+        k.high = r['high']
+        k.low = r['low']
+        k.close = r['close']
+        k.volume = r['volume']
+        k.amount = r['amount']
+        stk.realtime_update(k)
+
+
+def realtime_update_wrap():
+    pre_update_time = None
+
+    def realtime_update_closure(source='qq', delta=60, stk_list=None):
+        """
+        更新实时日线数据
+        :param str source: 数据源 ('qq' | 'qmt')
+        :param int delta: 最小更新间隔时间, 防止更新过于频繁
+        :param sequence stk_list: 待更新的stock列表, 如为 None 则更新全部
+        """
+        from datetime import timedelta, datetime
+        nonlocal pre_update_time
+        now_update_time = datetime.now()
+        if (source == 'qmt') or (pre_update_time is None) or (now_update_time - pre_update_time) > timedelta(0, delta, 0):
+            realtime_update_inner(source, stk_list)
+            pre_update_time = datetime.now()
+            print(f"更新完毕！更新时间: {pre_update_time}")
+        else:
+            print(f"更新间隔小于 {str(delta)} 秒，未更新")
+            print(f"上次更新时间: {pre_update_time}")
+
+    return realtime_update_closure
+
+
+realtime_update = realtime_update_wrap()
+
+
+def auto_sync_globals(func):
+    """
+    装饰器：自动同步全局变量到调用者的命名空间
+    """
+    def wrapper(*args, **kwargs):
+        # 执行原始函数
+        result = func(*args, **kwargs)
+
+        # 自动同步全局变量
+        try:
+            import sys
+            import inspect
+
+            # 获取调用栈
+            frame = inspect.currentframe()
+            try:
+                # 向上查找调用栈
+                caller_frame = frame.f_back
+                while caller_frame:
+                    caller_globals = caller_frame.f_globals
+                    # 检查是否是从hikyuu导入的全局变量且值为None
+                    var_names = ['blocka', 'blocka_shsz', 'zsbk_a', 'blocksh', 'zsbk_sh', 'blocksz', 'zsbk_sz',
+                                 'blockbj', 'zsbk_bj', 'blockg', 'zsbk_cyb', 'blockstart', 'blockzxb', 'blocketf',
+                                 'zsbk_zxb', 'zsbk_sh50', 'zsbk_sh180', 'zsbk_hs300', 'zsbk_zz100']
+
+                    updated_vars = []
+                    for var_name in var_names:
+                        if (var_name in caller_globals and
+                            caller_globals[var_name] is None and
+                            var_name in globals() and
+                                globals()[var_name] is not None):
+                            # 更新调用者的全局变量
+                            caller_globals[var_name] = globals()[var_name]
+                            updated_vars.append(var_name)
+
+                    # if updated_vars:
+                    #     print(f"自动同步全局变量: {', '.join(updated_vars)}")
+
+                    caller_frame = caller_frame.f_back
+            finally:
+                del frame
+        except Exception:
+            # 静默忽略错误
+            pass
+
+        return result
+    return wrapper
+
+
+# 为load_hikyuu函数应用自动同步装饰器
+load_hikyuu = auto_sync_globals(load_hikyuu)
