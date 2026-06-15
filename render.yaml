@@ -3,8 +3,8 @@ services:
   - type: web
     name: stock-quant
     env: node
-    region: singapore  # 新加坡节点，对中国API延迟最低
-    buildCommand: npm install --production
+    region: oregon
+    buildCommand: npm install --omit=dev
     startCommand: node server.js
     plan: free
     envVars:
@@ -14,7 +14,3 @@ services:
         value: 0.0.0.0
       - key: DEEPSEEK_API_KEY
         sync: false
-    disk:
-      name: data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 1

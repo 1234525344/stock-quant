@@ -1,9 +1,9 @@
 {
   "name": "stock-quant",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "量化交易平台 — 多因子Alpha · 组合优化 · 风险归因",
   "author": "QuantLab",
-  "main": "electron-main.js",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
@@ -11,70 +11,38 @@
     "pm2:stop": "pm2 stop stock-quant",
     "pm2:restart": "pm2 restart stock-quant",
     "pm2:logs": "pm2 logs stock-quant",
-    "pm2:status": "pm2 status",
     "test": "jest --coverage",
-    "test:watch": "jest --watch",
-    "electron": "electron electron-main.js",
-    "build": "electron-builder --win",
-    "build:dir": "electron-builder --win --dir"
+    "test:watch": "jest --watch"
   },
   "dependencies": {
     "axios": "^1.7.0",
-    "better-sqlite3": "^12.10.0",
-    "canvas": "^3.2.3",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
-    "docx": "^9.6.1",
     "dotenv": "^16.4.0",
-    "exceljs": "^4.4.0",
     "express": "^4.21.0",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
     "iconv-lite": "^0.7.2",
     "openai": "^4.73.0",
+    "sql.js": "^1.11.0",
+    "ws": "^8.20.1"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^12.10.0"
+  },
+  "devDependencies": {
+    "canvas": "^3.2.3",
+    "docx": "^9.6.1",
+    "electron": "^33.4.0",
+    "electron-builder": "^26.8.1",
+    "electron-packager": "^17.1.2",
+    "exceljs": "^4.4.0",
+    "jest": "^30.4.2",
     "playwright": "^1.60.0",
     "playwright-extra": "^4.3.6",
     "pm2": "^7.0.1",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "ws": "^8.20.1",
     "xlsx-populate": "^1.21.0"
-  },
-  "devDependencies": {
-    "electron": "^33.4.0",
-    "electron-builder": "^26.8.1",
-    "electron-packager": "^17.1.2",
-    "jest": "^30.4.2"
-  },
-  "build": {
-    "appId": "com.quantlab.stock-quant",
-    "productName": "量化交易平台",
-    "directories": {
-      "output": "dist-electron"
-    },
-    "files": [
-      "server.js",
-      "src/**/*",
-      "public/**/*",
-      "electron-main.js",
-      "node_modules/**/*"
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "量化交易平台"
-    }
   }
 }

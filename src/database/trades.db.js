@@ -1,7 +1,10 @@
 // 交易数据库 — better-sqlite3 持久化（磁盘直写，原子事务）
 const path = require("path");
 const fs = require("fs");
-const Database = require("better-sqlite3");
+let Database;
+try { Database = require("better-sqlite3"); } catch (e) {
+  console.log("[TradeDB] better-sqlite3 不可用，自动交易模块禁用");
+}
 const { logger } = require("../logger");
 
 class TradeDB {
