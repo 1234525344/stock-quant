@@ -2,7 +2,7 @@
 const router = require("express").Router();
 const { asyncHandler } = require("../middleware/errorHandler");
 const { getKlineData, getRealtimeQuotes, getStockName } = require("../data");
-const { execPython } = require("../python-bin");
+const { execPython, PYTHON_BIN } = require("../python-bin");
 const path = require("path");
 
 const ENGINE = path.join(__dirname, "../quant-engine.py");
@@ -10,8 +10,9 @@ const ENGINE = path.join(__dirname, "../quant-engine.py");
 function callEngine(cmd, data, args = []) {
   return new Promise((resolve) => {
     const { execFile } = require("child_process");
-    const { PYTHON_BIN } = require("../python-bin");
-    const child = execFile(PYTHON_BIN, [ENGINE, cmd, ...args], {
+    const { resolveScript } = require("../python-bin");
+    const script = resolveScript(ENGINE);
+    const child = execFile(PYTHON_BIN, [script, cmd, ...args], {
       timeout: 30000, maxBuffer: 10 * 1024 * 1024,
     }, (err, stdout) => {
       if (err) return resolve({ error: err.message });
