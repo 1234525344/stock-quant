@@ -49,7 +49,7 @@ function dedupedGet(url, opts = {}) {
   }
   const promise = fetchWithRetry(
     () => apiClient.get(url, opts),
-    { maxRetries: 2, baseDelay: 1500, label: url.slice(0, 80) }
+    { maxRetries: 1, baseDelay: 2000, label: url.slice(0, 80), circuitKey: "eastmoney", circuitThreshold: 10, circuitCooldown: 120000, timeout: 10000 }
   ).finally(() => {
     inflightRequests.delete(key);
   });
@@ -105,45 +105,107 @@ async function getRealtimeQuotes(codes) {
     codes = missed; // 只请求未缓存的
   }
 
-  // 2. HTTP请求 (连接池复用)
-  const symbols = codes.map(c => toSymbol(c)).join(",");
-  const url = `https://hq.sinajs.cn/list=${symbols}`;
-  const resp = await dedupedGet(url, {
-    timeout: 8000,
-    responseType: "arraybuffer",
-    headers: { Referer: "https://finance.sina.com.cn" },
-  });
-  const data = iconv.decode(Buffer.from(resp.data), "GBK");
-  if (!data) return [];
+  // 2. TDX TCP 优先 (pytdx, 非期权代码)
+  const httpCodes = codes.filter(c => c.length <= 6);
+  const optionCodes = codes.filter(c => c.length === 8);
+  let results = [];
 
-  const results = [];
-  const lines = data.split("\n").filter(Boolean);
-  for (const line of lines) {
-    const match = line.match(/hq_str_(.+)="(.+)"/);
-    if (!match) continue;
-    const [, symbol, raw] = match;
-    const fields = raw.split(",");
-    if (fields.length < 10) continue;
-    const code = symbol.slice(2);
-    const name = fields[0];
-    cacheName(code, name);
-    results.push({
-      code, name,
-      open: +fields[1], preClose: +fields[2], price: +fields[3],
-      high: +fields[4], low: +fields[5],
-      volume: +fields[8], amount: +fields[9],
-      change: fields[3] && fields[2] ? +(((fields[3] - fields[2]) / fields[2]) * 100).toFixed(2) : null,
-      changeAmount: fields[3] && fields[2] ? +(fields[3] - fields[2]).toFixed(2) : null,
-      turnover: null, pe: null, totalValue: null, floatValue: null,
-    });
+  if (httpCodes.length > 0) {
+    // 先尝试 TDX (pytdx TCP, 速度快)
+    try {
+      const { getTdxQuotes } = require("./tdx-bridge");
+      const tdxResults = await getTdxQuotes(httpCodes);
+      if (tdxResults.length > 0) {
+        results.push(...tdxResults.filter(q => q.price > 0));
+        // 更新引擎缓存
+        if (engine) tdxResults.forEach(q => engine.quoteCache.set(q.code, { time: Date.now(), data: { ...q, source: "tdx_tcp" } }));
+        // 移除已获取的代码
+        const gotCodes = new Set(tdxResults.filter(q => q.price > 0).map(q => q.code));
+        const remaining = httpCodes.filter(c => !gotCodes.has(c));
+        if (remaining.length === 0) {
+          // 全部获取成功, 跳过 HTTP (期权仍然需要获取)
+          if (optionCodes.length > 0) {
+            try {
+              const { getOptionQuotes } = require("./opt-bridge");
+              const optData = await getOptionQuotes(optionCodes);
+              if (optData.length) results.push(...optData.filter(q => q.price > 0));
+            } catch(e) {}
+          }
+          return results;
+        }
+        httpCodes.length = 0;
+        httpCodes.push(...remaining);
+      }
+    } catch(e) { /* TDX失败, 降级HTTP */ }
   }
 
-  // 写入实时引擎缓存
-  if (engine && results.length > 0) {
-    for (const q of results) {
-      engine.quoteCache.set(q.code, { time: Date.now(), data: { ...q, source: "sina_http" } });
-    }
+  if (httpCodes.length > 0) {
+    try {
+      const symbols = httpCodes.map(c => toSymbol(c)).join(",");
+      const url = `https://hq.sinajs.cn/list=${symbols}`;
+      const resp = await dedupedGet(url, {
+        timeout: 8000, responseType: "arraybuffer",
+        headers: { Referer: "https://finance.sina.com.cn" },
+      });
+      const data = iconv.decode(Buffer.from(resp.data), "GBK");
+      if (data) {
+        const lines = data.split("\n").filter(Boolean);
+        for (const line of lines) {
+          const match = line.match(/hq_str_(.+)="(.+)"/);
+          if (!match) continue;
+          const [, symbol, raw] = match;
+          const fields = raw.split(",");
+          if (fields.length < 10) continue;
+          const code = symbol.slice(2);
+          const name = fields[0];
+          cacheName(code, name);
+          results.push({
+            code, name,
+            open: +fields[1], preClose: +fields[2], price: +fields[3],
+            high: +fields[4], low: +fields[5],
+            volume: +fields[8], amount: +fields[9],
+            change: fields[3] && fields[2] ? +(((fields[3] - fields[2]) / fields[2]) * 100).toFixed(2) : null,
+            changeAmount: fields[3] && fields[2] ? +(fields[3] - fields[2]).toFixed(2) : null,
+            turnover: null, pe: null, totalValue: null, floatValue: null,
+          });
+        }
+        if (engine) results.forEach(q => engine.quoteCache.set(q.code, { time: Date.now(), data: { ...q, source: "sina_http" } }));
+      }
+    } catch(e) { /* HTTP failed, will try TDX below */ }
   }
+
+  // 3. 期权代码 → akshare (Sina SSE 实时行情, 免费)
+  if (optionCodes.length > 0) {
+    try {
+      const { getOptionQuotes } = require("./opt-bridge");
+      const optResults = await getOptionQuotes(optionCodes);
+      const validOpts = optResults.filter(q => q.price > 0);
+      if (validOpts.length > 0) {
+        results.push(...validOpts);
+        if (engine) validOpts.forEach(q => engine.quoteCache.set(q.code, { time: Date.now(), data: { ...q, source: "akshare" } }));
+        // 补全缺失的期权代码（手动录入数据）
+        const missingOpts = optionCodes.filter(c => !validOpts.find(q => q.code === c));
+        if (missingOpts.length > 0) {
+          try {
+            const { getTDXSnapshot } = require("./tdx-reader");
+            const tdxOpt = getTDXSnapshot(missingOpts);
+            if (tdxOpt.length) results.push(...tdxOpt);
+          } catch(e) {}
+        }
+      } else {
+        // akshare失败, 尝试TDX本地
+        try {
+          const { getTDXSnapshot } = require("./tdx-reader");
+          const tdxResults = getTDXSnapshot(optionCodes);
+          if (tdxResults.length) {
+            results.push(...tdxResults);
+            if (engine) tdxResults.forEach(q => engine.quoteCache.set(q.code, { time: Date.now(), data: { ...q, source: "tdx_snapshot" } }));
+          }
+        } catch(e) {}
+      }
+    } catch(e) { /* 期权数据源全部失败 */ }
+  }
+
   return results;
 }
 
@@ -240,39 +302,24 @@ async function getStockName(code) {
 
 // ============ 资金流向 ============
 
-// HTTPS优先请求 (东方财富push2 API, 失败时降级HTTP)
-function nativeHttpsGet(url, timeoutMs = 6000) {
-  // 优先尝试HTTPS，利用已配置的keepAlive连接池
+// 东方财富 push2 API (HTTP 直连, 快速失败)
+function nativeHttpsGet(url, timeoutMs = 5000) {
+  const httpUrl = url.replace(/^https:\/\//, "http://");
   return new Promise((resolve, reject) => {
-    const doRequest = (targetUrl) => {
-      const isHttps = targetUrl.startsWith("https://");
-      const lib = isHttps ? https : http;
-      const opts = {
-        timeout: timeoutMs,
-        headers: { "User-Agent": "Mozilla/5.0" },
-      };
-      if (isHttps) opts.agent = httpsAgent;
-
-      const req = lib.get(targetUrl, opts, (res) => {
-        let body = "";
-        res.on("data", (chunk) => { body += chunk; });
-        res.on("end", () => {
-          try { resolve(JSON.parse(body)); }
-          catch (e) { reject(new Error("JSON parse failed")); }
-        });
+    const req = http.get(httpUrl, {
+      timeout: timeoutMs,
+      agent: httpAgent,
+      headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://data.eastmoney.com" },
+    }, (res) => {
+      let body = "";
+      res.on("data", (chunk) => { body += chunk; });
+      res.on("end", () => {
+        try { resolve(JSON.parse(body)); }
+        catch (e) { reject(new Error("JSON parse failed")); }
       });
-      req.on("error", (err) => {
-        // HTTPS失败时降级HTTP重试
-        if (isHttps && err.code !== "ERR_INVALID_PROTOCOL") {
-          const httpUrl = targetUrl.replace(/^https:\/\//, "http://");
-          doRequest(httpUrl);
-        } else {
-          reject(err);
-        }
-      });
-      req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
-    };
-    doRequest(url);
+    });
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
   });
 }
 

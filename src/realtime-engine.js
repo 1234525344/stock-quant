@@ -225,6 +225,7 @@ class RealtimeEngine extends EventEmitter {
       if (!data) return;
 
       const lines = data.split("\n").filter(Boolean);
+      let gotCount = 0;
       for (const line of lines) {
         const match = line.match(/hq_str_(.+)="(.+)"/);
         if (!match) continue;
@@ -242,9 +243,52 @@ class RealtimeEngine extends EventEmitter {
           source: "sina_http",
         };
         this._updateQuote(code, quote);
+        gotCount++;
+      }
+      if (gotCount === 0) await this._fetchTencentQuotes(codes);
+    } catch (e) {
+      await this._fetchTencentQuotes(codes);
+    }
+  }
+
+  async _fetchTencentQuotes(codes) {
+    const symbols = codes.map(c =>
+      (c.startsWith("5") || c.startsWith("6")) ? `sh${c}` : `sz${c}`
+    ).join(",");
+    try {
+      const url = `https://qt.gtimg.cn/q=${symbols}`;
+      const resp = await dedupedGet(url, {
+        timeout: 5000,
+        responseType: "arraybuffer",
+        headers: { Referer: "https://finance.qq.com" },
+      });
+      const data = iconv.decode(Buffer.from(resp.data), "GBK");
+      if (!data) return;
+      const lines = data.split("\n").filter(Boolean);
+      for (const line of lines) {
+        if (!line.includes('="')) continue;
+        const parts = line.split('="');
+        if (parts.length < 2) continue;
+        const raw = parts[1].replace(/";?\s*$/, '');
+        const fields = raw.split("~");
+        if (fields.length < 10) continue;
+        const name = fields[1];
+        const code = fields[2];
+        if (!code || code.length < 6) continue;
+        const quote = {
+          code, name: name || code,
+          open: +fields[5] || 0, preClose: +fields[4] || 0, price: +fields[3] || 0,
+          high: +fields[33] || 0, low: +fields[34] || 0,
+          volume: +fields[6] || 0, amount: +fields[37] || 0,
+          change: fields[3] && fields[4] ? +(((fields[3] - fields[4]) / fields[4]) * 100).toFixed(2) : null,
+          changeAmount: fields[3] && fields[4] ? +(fields[3] - fields[4]).toFixed(2) : null,
+          source: "tencent_http",
+        };
+        this._updateQuote(code, quote);
       }
     } catch (e) {}
   }
+
 
   // ================== 行情更新 ==================
 

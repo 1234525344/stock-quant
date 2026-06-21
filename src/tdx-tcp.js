@@ -12,8 +12,6 @@ const TDX_SERVERS = [
   { host: "119.147.212.81", port: 7709 },
   { host: "47.92.127.149", port: 7709 },
   { host: "120.76.152.2", port: 7709 },
-  { host: "124.70.45.107", port: 7709 },
-  { host: "47.94.201.130", port: 7709 },
 ];
 
 class TDXTCPClient {
@@ -28,6 +26,7 @@ class TDXTCPClient {
     this.serverIndex = 0;
     this.buffer = Buffer.alloc(0);
     this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 100; // 100次后放弃, 改用HTTP fallback
     this.maxReconnectDelay = 30000;
   }
 
@@ -119,24 +118,28 @@ class TDXTCPClient {
   // ====== 内部 ======
 
   _sendLogin() {
-    // TDX登录包: 标准的客户端认证请求
-    // 对于行情服务器, 通常发送简单的认证消息
-    const loginPacket = this._buildPacket([0x01, 0x00]); // 登录命令
-    this._rawSend(loginPacket);
+    // TDX行情服务器登录: 0x0c 命令 + 认证数据
+    const loginBody = Buffer.alloc(62, 0);
+    loginBody.write("dxqb", 0, 4, "ascii");       // 客户端标识
+    loginBody.writeUInt16LE(0x0c, 4);               // 命令
+    loginBody.writeUInt16LE(0, 6);                  // 保留
+    const packet = this._buildPacket([0x0c, 0x02, 0x18, 0x61, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00], loginBody);
+    this._rawSend(packet);
   }
 
   _sendSubscribe(codes) {
-    // TDX订阅请求包
-    // 格式: 命令码(1) + 市场(1) + 股票代码列表
-    const codeStrs = [];
-    for (const code of codes) {
-      const mkt = code.startsWith("6") ? 1 : 0; // 1=沪, 0=深
-      codeStrs.push(String.fromCharCode(mkt) + code);
+    // 分组订阅: 每50个一组
+    const groups = [];
+    for (let i = 0; i < codes.length; i += 50) groups.push(codes.slice(i, i + 50));
+    for (const group of groups) {
+      const items = group.map(code => {
+        const mkt = code.startsWith("6") || code.startsWith("5") || code.startsWith("9") ? 1 : code.length === 8 ? 1 : 0;
+        return String.fromCharCode(mkt) + code.slice(0, 6);
+      });
+      const body = Buffer.from(items.join(""), "binary");
+      const packet = this._buildPacket([0x02, 0x00], body);
+      this._rawSend(packet);
     }
-
-    const body = Buffer.from(codeStrs.join(""), "binary");
-    const packet = this._buildPacket([0x02, 0x00], body); // 订阅命令
-    this._rawSend(packet);
   }
 
   _buildPacket(cmdBytes, body = Buffer.alloc(0)) {
@@ -241,7 +244,7 @@ class TDXTCPClient {
         offset += 8;
       }
 
-      if (price > 0 && price < 100000 && code.length === 6) {
+      if (price > 0 && price < 100000 && (code.length === 6 || code.length === 8)) {
         const quote = {
           code, name,
           open, preClose, price, high, low,
@@ -313,6 +316,16 @@ class TDXTCPClient {
 
   _scheduleReconnect() {
     if (this.reconnectTimer) return;
+
+    // 达到最大重连次数后永久放弃
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      logger.warn(`[TDX] 已达最大重连次数 (${this.maxReconnectAttempts})，停止重连。使用 HTTP fallback 获取行情`);
+      this._notifyStatus("permanent_failure", {
+        reason: "max_reconnect_exceeded",
+        attempts: this.reconnectAttempts,
+      });
+      return;
+    }
 
     this.serverIndex = (this.serverIndex + 1) % TDX_SERVERS.length;
     this.reconnectAttempts++;

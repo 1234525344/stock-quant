@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>期权行情 — 量化交易平台</title>
+<link rel="stylesheet" href="/css/responsive.css?v=90">
+<script src="/js/echarts.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:#f5f6fa;color:#333;min-height:100vh}
+.header{background:#fff;padding:10px 20px;display:flex;align-items:center;gap:12px;border-bottom:2px solid #1E88E5;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.header .logo{font-size:18px;font-weight:700;color:#1E88E5}
+.header a{color:#666;text-decoration:none;font-size:14px;padding:6px 12px;border-radius:6px}
+.header a:hover{background:#f0f0f0}
+.container{padding:16px;max-width:1400px;margin:0 auto}
+
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.filters select,.filters input{padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:#fff}
+.filters select{min-width:100px}
+.filters input[type=number]{width:90px}
+.filters .count{font-size:13px;color:#999;margin-left:auto}
+.filters button{padding:8px 16px;background:#1E88E5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px}
+.filters button:hover{opacity:.85}
+
+.opt-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.06);background:#fff;max-height:55vh;overflow-y:auto}
+.opt-table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
+.opt-table th{position:sticky;top:0;background:#2F5496;color:#fff;padding:10px 8px;text-align:center;font-weight:600;z-index:2}
+.opt-table td{padding:8px;text-align:center;border-bottom:1px solid #f0f0f0;cursor:pointer}
+.opt-table tr:hover td{background:#EBF3FF}
+.opt-table tr.selected td{background:#D6E9FF;font-weight:600}
+.opt-table .call td:first-child{border-left:3px solid #ef4444}
+.opt-table .put td:first-child{border-left:3px solid #22c55e}
+.price-up{color:#ef4444;font-weight:600}
+.price-down{color:#22c55e;font-weight:600}
+
+.chart-section{background:#fff;border-radius:10px;padding:16px;margin-top:14px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.chart-header h3{font-size:16px;color:#333}
+.chart-header .detail{font-size:13px;color:#999}
+.chart-box{width:100%;height:360px}
+
+.empty{text-align:center;padding:40px;color:#999}
+.loading{text-align:center;padding:40px;color:#1E88E5}
+.error{text-align:center;padding:40px;color:#ef4444}
+
+@media (max-width:768px){
+  .header{padding:8px 12px}
+  .container{padding:8px}
+  .filters{flex-direction:column;align-items:stretch}
+  .filters .count{margin-left:0}
+  .chart-box{height:260px}
+  .opt-table{font-size:11px}
+  .opt-table th,.opt-table td{padding:6px 4px}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">📊 期权行情</div>
+  <a href="/">← 返回主页</a>
+  <a href="/watchlist.html">⭐ 自选股</a>
+</div>
+
+<div class="container">
+  <div class="filters">
+    <select id="filterType">
+      <option value="">全部类型</option>
+      <option value="认购">📈 认购 (Call)</option>
+      <option value="认沽">📉 认沽 (Put)</option>
+    </select>
+    <select id="filterExpire">
+      <option value="">全部到期月</option>
+    </select>
+    <input type="number" id="filterStrikeMin" placeholder="行权价≥" step="0.01">
+    <input type="number" id="filterStrikeMax" placeholder="行权价≤" step="0.01">
+    <input type="text" id="filterCode" placeholder="搜索代码..." style="width:140px">
+    <button onclick="applyFilters()">筛选</button>
+    <span class="count" id="resultCount"></span>
+  </div>
+
+  <div class="opt-table-wrap" id="tableWrap">
+    <div class="loading" id="loadingMsg">加载期权数据中...</div>
+  </div>
+
+  <div class="chart-section" id="chartSection" style="display:none">
+    <div class="chart-header">
+      <h3 id="chartTitle">选择合约查看走势</h3>
+      <div class="detail" id="chartDetail"></div>
+    </div>
+    <div class="chart-box" id="chartBox"></div>
+  </div>
+</div>
+
+<script>
+let allContracts = [];
+let quotesMap = {};
+let selectedSymbol = null;
+let chart = null;
+
+async function init() {
+  try {
+    const resp = await fetch('/api/option/info');
+    allContracts = await resp.json();
+    if (!allContracts.length) {
+      document.getElementById('loadingMsg').innerHTML = '<div class="error">暂无期权数据</div>';
+      return;
+    }
+    // Build expire filter
+    const expires = [...new Set(allContracts.map(c => c.expireDate))].sort();
+    const sel = document.getElementById('filterExpire');
+    expires.forEach(e => {
+      const opt = document.createElement('option');
+      opt.value = e;
+      opt.textContent = e;
+      sel.appendChild(opt);
+    });
+    // 初始只渲染合约列表（不加载价格——太慢）
+    applyFilters();
+    // 每30秒刷新已选合约价格
+    setInterval(async () => {
+      if (selectedSymbol) {
+        const quoteResp = await fetch('/api/option/quotes?codes=' + selectedSymbol);
+        const quotes = await quoteResp.json();
+        if (quotes.length > 0 && quotes[0].price > 0) {
+          quotesMap[selectedSymbol] = quotes[0];
+          updatePriceCell(selectedSymbol);
+          updateSelectedPrice();
+        }
+      }
+    }, 30000);
+  } catch(e) {
+    document.getElementById('loadingMsg').innerHTML = '<div class="error">数据加载失败，请刷新页面</div>';
+  }
+}
+
+async function loadQuotes() {
+  // 仅加载当前可见合约的价格 (最多50个)
+  const visible = allContracts.slice(0, 50).map(c => c.code);
+  if (!visible.length) return;
+  try {
+    const resp = await fetch('/api/option/quotes?codes=' + visible.join(','));
+    const quotes = await resp.json();
+    quotes.forEach(q => { if (q.price > 0) quotesMap[q.code] = q; });
+  } catch(e) {}
+}
+
+async function loadQuotesForFiltered(filtered) {
+  // 加载筛选后可见合约的价格 (最多20个，避免超时)
+  const codes = filtered.slice(0, 20).map(c => c.code);
+  if (!codes.length) return;
+  try {
+    const resp = await fetch('/api/option/quotes?codes=' + codes.join(','));
+    const quotes = await resp.json();
+    quotes.forEach(q => { if (q.price > 0) quotesMap[q.code] = q; });
+    // 刷新表格中对应的价格单元格
+    codes.forEach(c => updatePriceCell(c));
+    updateSelectedPrice();
+  } catch(e) {}
+}
+
+function applyFilters(silent) {
+  const type = document.getElementById('filterType').value;
+  const expire = document.getElementById('filterExpire').value;
+  const strikeMin = parseFloat(document.getElementById('filterStrikeMin').value) || 0;
+  const strikeMax = parseFloat(document.getElementById('filterStrikeMax').value) || 9999;
+  const codeFilter = document.getElementById('filterCode').value.trim();
+
+  let filtered = allContracts.filter(c => {
+    if (type && c.type !== type) return false;
+    if (expire && c.expireDate !== expire) return false;
+    if (c.strike < strikeMin || c.strike > strikeMax) return false;
+    if (codeFilter && !c.code.includes(codeFilter) && !(c.tradingCode||'').includes(codeFilter)) return false;
+    return true;
+  });
+
+  document.getElementById('resultCount').textContent = `共 ${filtered.length} 个合约`;
+
+  if (!silent) {
+    renderTable(filtered);
+    loadQuotesForFiltered(filtered).then(() => renderTable(filtered));
+  }
+  updateSelectedPrice();
+}
+
+function renderTable(contracts) {
+  const rows = contracts.map(c => {
+    const displayCode = c.tradingCode || c.code;
+    const q = quotesMap[c.code] || {};
+    const price = q.price || 0;
+    const chg = q.price && q.preClose ? ((q.price - q.preClose) / q.preClose * 100) : 0;
+    const chgCls = chg >= 0 ? 'price-up' : 'price-down';
+    const typeCls = c.type === '认购' ? 'call' : 'put';
+    return `<tr class="${typeCls}" onclick="selectContract('${c.code}','${c.name}')" data-code="${c.code}">
+      <td>${displayCode}</td><td>${c.name}</td><td>${c.type}</td>
+      <td>${c.strike.toFixed(3)}</td><td>${c.expireDate}</td>
+      <td class="${chgCls}">${price ? price.toFixed(4) : '-'}</td>
+      <td class="${chgCls}">${chg ? (chg>=0?'+':'')+chg.toFixed(2)+'%' : '-'}</td>
+      <td>${q.volume != null && q.volume !== undefined ? q.volume : '-'}</td>
+    </tr>`;
+  }).join('');
+
+  const table = `<table class="opt-table"><thead><tr>
+    <th>代码</th><th>名称</th><th>类型</th><th>行权价</th><th>到期日</th><th>最新价</th><th>涨跌幅</th><th>成交量</th>
+  </tr></thead><tbody>${rows || '<tr><td colspan="8" class="empty">无匹配合约</td></tr>'}</tbody></table>`;
+
+  document.getElementById('tableWrap').innerHTML = table;
+}
+
+function updatePriceCell(code) {
+  const q = quotesMap[code];
+  if (!q) return;
+  const row = document.querySelector(`tr[data-code="${code}"]`);
+  if (!row) return;
+  const cells = row.querySelectorAll('td');
+  if (cells.length < 8) return;
+  const chg = q.price && q.preClose ? ((q.price - q.preClose) / q.preClose * 100) : 0;
+  const chgCls = chg >= 0 ? 'price-up' : 'price-down';
+  cells[5].innerHTML = q.price ? `<span class="${chgCls}">${q.price.toFixed(4)}</span>` : '-';
+  cells[6].innerHTML = chg ? `<span class="${chgCls}">${chg>=0?'+':''}${chg.toFixed(2)}%</span>` : '-';
+  cells[7].textContent = q.volume != null ? q.volume : '-';
+}
+
+function updateSelectedPrice() {
+  if (!selectedSymbol) return;
+  const q = quotesMap[selectedSymbol];
+  if (q) {
+    const chg = q.price && q.preClose ? ((q.price - q.preClose) / q.preClose * 100) : 0;
+    document.getElementById('chartDetail').textContent = `最新: ${q.price?.toFixed(4) || '-'}  |  涨跌: ${chg>=0?'+':''}${chg.toFixed(2)}%  |  成交量: ${q.volume || 0}`;
+  }
+}
+
+async function selectContract(code, name) {
+  selectedSymbol = code;
+  document.getElementById('chartSection').style.display = 'block';
+  document.getElementById('chartTitle').textContent = `${code} ${name}`;
+  updateSelectedPrice();
+
+  // Highlight row
+  document.querySelectorAll('.opt-table tr').forEach(r => r.classList.remove('selected'));
+  const row = document.querySelector(`tr[data-code="${code}"]`);
+  if (row) row.classList.add('selected');
+
+  // Load minute data and render chart
+  try {
+    // 同步加载价格到quotesMap
+    const quoteResp = await fetch(`/api/option/quotes?codes=${code}`);
+    const quotes = await quoteResp.json();
+    if (quotes.length > 0 && quotes[0].price > 0) {
+      quotesMap[code] = quotes[0];
+      updatePriceCell(code);
+      updateSelectedPrice();
+    }
+
+    const resp = await fetch(`/api/option/minute/${code}`);
+    const data = await resp.json();
+    if (!data.length) { document.getElementById('chartDetail').textContent += ' | 暂无分钟数据'; return; }
+
+    const times = data.map(d => d.time);
+    const prices = data.map(d => d.price);
+    const volumes = data.map(d => d.volume);
+
+    if (!chart) chart = echarts.init(document.getElementById('chartBox'));
+
+    chart.setOption({
+      tooltip: { trigger: 'axis' },
+      grid: { left: 60, right: 20, top: 20, bottom: 50 },
+      xAxis: { type: 'category', data: times, axisLabel: { fontSize: 10, rotate: 45 } },
+      yAxis: [
+        { type: 'value', name: '价格', axisLabel: { fontSize: 10 } },
+        { type: 'value', name: '成交量', axisLabel: { fontSize: 10 } }
+      ],
+      series: [
+        { name: '价格', type: 'line', data: prices, smooth: true, lineStyle: { color: '#1E88E5', width: 2 },
+          areaStyle: { color: 'rgba(30,136,229,0.1)' }, symbol: 'none' },
+        { name: '成交量', type: 'bar', yAxisIndex: 1, data: volumes,
+          itemStyle: { color: 'rgba(30,136,229,0.3)' } }
+      ],
+      dataZoom: [{ type: 'inside', start: 50, end: 100 }]
+    });
+  } catch(e) {
+    console.error('Chart error:', e);
+  }
+}
+
+window.addEventListener('resize', () => { if (chart) chart.resize(); });
+document.getElementById('filterCode').addEventListener('input', () => applyFilters());
+init();
+</script>
+</body>
+</html>

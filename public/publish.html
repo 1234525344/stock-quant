@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>一键发布</title>
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/responsive.css?v=90">
 <style>
 .pub-step { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; padding: 24px; margin-bottom: 14px; display: flex; align-items: center; gap: 16px; transition: .3s; }
 .pub-step.done { border-color: rgba(74,222,128,.4); background: rgba(74,222,128,.06); }
@@ -135,13 +136,13 @@ function publishTo(platform) {
       text = short;
       break;
     case 'zhihu':
-      text = short + '\n\n免费量化分析工具：https://stockquant.serveousercontent.com\n#量化交易 #A股 #技术分析';
+      text = short + `\n\n免费量化分析工具：${location.origin}\n#量化交易 #A股 #技术分析`;
       break;
     case 'guba':
-      text = short + '\n\n工具地址：https://stockquant.serveousercontent.com';
+      text = short + `\n\n工具地址：${location.origin}`;
       break;
     case 'xiaohongshu':
-      text = short + '\n\n🔗 工具：https://stockquant.serveousercontent.com\n#量化交易 #股票分析 #A股工具 #投资理财';
+      text = short + `\n\n🔗 工具：${location.origin}\n#量化交易 #股票分析 #A股工具 #投资理财`;
       break;
   }
 

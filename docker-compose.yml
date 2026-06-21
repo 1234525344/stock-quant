@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  stock-quant:
+    build:
+      context: .
+      args:
+        # Set to "true" to include Qlib ML model training/prediction (~400MB extra)
+        INSTALL_QLIB: ${INSTALL_QLIB:-false}
+    container_name: stock-quant
+    ports:
+      - "${PORT:-3456}:3456"
+    volumes:
+      - stock-quant-data:/app/data
+      - stock-quant-logs:/app/logs
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3456
+      - PYTHON_BIN=python3
+      # AI API key (required for AI features)
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - AIHUBMIX_API_KEY=${AIHUBMIX_API_KEY:-}
+      # WxPusher notification (optional)
+      - WXPUSHER_APP_TOKEN=${WXPUSHER_APP_TOKEN:-}
+      - WXPUSHER_UIDS=${WXPUSHER_UIDS:-}
+      # Public-facing URL (used in share/preview pages)
+      - PUBLIC_URL=${PUBLIC_URL:-}
+      # TDX local data directory (optional, skip for HTTP-only mode)
+      - TDX_ROOT=${TDX_ROOT:-}
+      # CORS origin override (default: *)
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3456/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  stock-quant-data:
+  stock-quant-logs:

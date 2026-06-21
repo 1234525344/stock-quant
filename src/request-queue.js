@@ -1,7 +1,53 @@
-// 请求队列 — 带指数退避的并发控制
+// 请求队列 — 带指数退避的并发控制 + 熔断器
 // 替代 batchWithLimit 的简单并发限制，增加重试和退避机制
 
 const { logger } = require("./logger");
+
+// ====== 熔断器 (Circuit Breaker) ======
+const circuitState = new Map(); // key -> { failures, lastFail, open }
+
+function getCircuit(key, { threshold = 5, cooldownMs = 300000 } = {}) {
+  if (!circuitState.has(key)) {
+    circuitState.set(key, { failures: 0, lastFail: 0, open: false, threshold, cooldownMs });
+  }
+  return circuitState.get(key);
+}
+
+function circuitFail(key, opts) {
+  const cb = getCircuit(key, opts);
+  cb.failures++;
+  cb.lastFail = Date.now();
+  if (cb.failures >= cb.threshold) {
+    cb.open = true;
+    logger.warn(`[CircuitBreaker] ${key} 熔断开启 (${cb.failures}次连续失败, ${cb.cooldownMs/1000}s冷却)`);
+  }
+}
+
+function circuitSuccess(key, opts) {
+  const cb = getCircuit(key, opts);
+  cb.failures = 0;
+  cb.open = false;
+}
+
+function isCircuitOpen(key, opts) {
+  const cb = getCircuit(key, opts);
+  if (!cb.open) return false;
+  if (Date.now() - cb.lastFail > cb.cooldownMs) {
+    cb.open = false;
+    cb.failures = 0;
+    logger.info(`[CircuitBreaker] ${key} 熔断冷却结束, 恢复请求`);
+    return false;
+  }
+  return true;
+}
+
+// 请求超时包装
+function withTimeout(promise, ms = 15000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`请求超时 (${ms}ms)`)), ms))
+  ]);
+}
 
 class RequestQueue {
   /**
@@ -81,16 +127,27 @@ class RequestQueue {
   getStats() { return { ...this.stats, pending: this.queue.length, running: this.running }; }
 }
 
-// 带退避的单次请求包装
-async function fetchWithRetry(fn, { maxRetries = 3, baseDelay = 1000, label = "fetch" } = {}) {
+// 带退避的单次请求包装 (含熔断器)
+async function fetchWithRetry(fn, { maxRetries = 3, baseDelay = 1000, label = "fetch", circuitKey = null, circuitThreshold = 5, circuitCooldown = 300000, timeout = 15000 } = {}) {
+  // 熔断器检查
+  if (circuitKey && isCircuitOpen(circuitKey, { threshold: circuitThreshold, cooldownMs: circuitCooldown })) {
+    const err = new Error(`[CircuitBreaker] ${circuitKey} 已熔断, 跳过请求`);
+    logger.warn(err.message);
+    throw err;
+  }
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await fn();
+      const result = await withTimeout(fn(), timeout);
+      if (circuitKey) circuitSuccess(circuitKey, { threshold: circuitThreshold, cooldownMs: circuitCooldown });
+      return result;
     } catch (err) {
       if (attempt === maxRetries) {
         logger.error(`[fetchWithRetry] ${label} 最终失败`, { error: err.message, attempts: attempt + 1 });
+        if (circuitKey) circuitFail(circuitKey, { threshold: circuitThreshold, cooldownMs: circuitCooldown });
         throw err;
       }
+      if (circuitKey) circuitFail(circuitKey, { threshold: circuitThreshold, cooldownMs: circuitCooldown });
       const delay = Math.min(baseDelay * Math.pow(2, attempt), 30000);
       const jitter = delay * 0.3;
       const wait = Math.floor(delay - jitter + Math.random() * 2 * jitter);

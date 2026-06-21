@@ -1,10 +1,24 @@
 // Qlib Bridge — Node.js ↔ Python child_process interface
-const { spawn } = require("child_process");
+const { spawnPython, PYTHON_BIN } = require("./python-bin");
 const path = require("path");
 const fs = require("fs");
 
 const PYTHON_SCRIPT = path.join(__dirname, "..", "python", "qlib_service.py");
-const PYTHON = "python";
+
+// Check if Qlib Python package is installed (expensive imports like numpy/pandas/scipy/qlib)
+let _qlibAvailable = null;
+function isQlibAvailable() {
+  if (_qlibAvailable !== null) return _qlibAvailable;
+  try {
+    require("child_process").execFileSync(PYTHON_BIN, ["-c", "import qlib"], { timeout: 10000 });
+    _qlibAvailable = true;
+  } catch (e) {
+    console.warn("[Qlib] Python package 'qlib' not installed. Qlib ML features disabled.");
+    console.warn("[Qlib] Rebuild with: docker-compose build --build-arg INSTALL_QLIB=true");
+    _qlibAvailable = false;
+  }
+  return _qlibAvailable;
+}
 
 /**
  * Call the Python Qlib service and return parsed JSON.
@@ -14,10 +28,8 @@ const PYTHON = "python";
  */
 function callPython(args, timeout = 300000) {
   return new Promise((resolve, reject) => {
-    const child = spawn(PYTHON, [PYTHON_SCRIPT, ...args], {
+    const child = spawnPython(PYTHON_SCRIPT, args, {
       cwd: path.join(__dirname, ".."),
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
     });
 
     let stdout = "";
@@ -65,10 +77,13 @@ function callPython(args, timeout = 300000) {
   });
 }
 
+const QLIB_UNAVAILABLE = { error: "Qlib 未安装。请使用 INSTALL_QLIB=true 重新构建 Docker 镜像。" };
+
 /**
  * Get Qlib environment status.
  */
 async function getStatus() {
+  if (!isQlibAvailable()) return QLIB_UNAVAILABLE;
   return callPython(["status"], 60000);
 }
 
@@ -76,6 +91,7 @@ async function getStatus() {
  * List all trained models.
  */
 async function listModels() {
+  if (!isQlibAvailable()) return QLIB_UNAVAILABLE;
   return callPython(["list-models"], 60000);
 }
 
@@ -93,6 +109,7 @@ async function listModels() {
  * @param {string} [options.testEnd]
  */
 async function trainModel(options = {}) {
+  if (!isQlibAvailable()) return QLIB_UNAVAILABLE;
   const args = ["train", "--market", options.market || "csi300",
                 "--model-type", options.modelType || "lgb"];
   if (options.modelName) args.push("--model-name", options.modelName);
@@ -113,6 +130,7 @@ async function trainModel(options = {}) {
  * @param {string[]} [options.stocks] - stock codes
  */
 async function predict(modelName, options = {}) {
+  if (!isQlibAvailable()) return QLIB_UNAVAILABLE;
   const args = ["predict", "--model-name", modelName];
   if (options.date) args.push("--date", options.date);
   if (options.stocks && options.stocks.length) {
@@ -125,6 +143,7 @@ async function predict(modelName, options = {}) {
  * Get model metrics.
  */
 async function getModelMetrics(modelName) {
+  if (!isQlibAvailable()) throw new Error("Qlib 未安装");
   const result = await predict(modelName);
   if (result.error) throw new Error(result.error);
   return result;

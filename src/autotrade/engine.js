@@ -12,7 +12,7 @@ const { STOCK_POOL } = require("../state");
 const { isTradingHours } = require("../helpers");
 const { detectRegime, getSuggestedStrategy, REGIMES } = require("./regime");
 const { generateDailyReport, saveDailyReport, strategyHealthCheck } = require("./auto-optimizer");
-const { sendWxPusher, formatTradeMessage, formatDailySummary } = require("../services/notify");
+const { getWxPusherConfig, sendWxPusher, formatTradeMessage, formatDailySummary } = require("../services/notify");
 
 // 不同市场状态下的仓位系数
 const REGIME_POSITION_FACTOR = {
@@ -443,8 +443,8 @@ class AutoTradeEngine extends EventEmitter {
     try {
       const settings = tradeDB.getSettings();
       if (settings.notify_on_trade !== "true") return;
-      const config = { appToken: settings.wxpusher_appToken, uids: settings.wxpusher_uids };
-      if (!config.appToken || !config.uids?.length) return;
+      const config = getWxPusherConfig(settings);
+      if (!config) return;
       const msg = formatTradeMessage({
         code: result.code,
         name: result.name,
@@ -464,10 +464,10 @@ class AutoTradeEngine extends EventEmitter {
   async _notifyEngineStart() {
     try {
       const settings = tradeDB.getSettings();
-      this._log("INFO", `[通知] settings: notify=${settings.notify_on_trade}, appToken=${settings.wxpusher_appToken?.slice(0,10)}..., uids=${JSON.stringify(settings.wxpusher_uids)}`);
+      const config = getWxPusherConfig(settings);
+      this._log("INFO", `[通知] settings: notify=${settings.notify_on_trade}, appToken=${config?.appToken?.slice(0,10) || "none"}..., uids=${JSON.stringify(config?.uids || [])}`);
       if (settings.notify_on_trade !== "true") return;
-      const config = { appToken: settings.wxpusher_appToken, uids: settings.wxpusher_uids };
-      if (!config.appToken || !config.uids?.length) {
+      if (!config) {
         this._log("WARN", `[通知] 缺少 appToken 或 uid`);
         return;
       }
@@ -498,8 +498,8 @@ class AutoTradeEngine extends EventEmitter {
     try {
       const settings = tradeDB.getSettings();
       if (settings.notify_on_daily !== "true") return;
-      const config = { appToken: settings.wxpusher_appToken, uids: settings.wxpusher_uids };
-      if (!config.appToken || !config.uids?.length) return;
+      const config = getWxPusherConfig(settings);
+      if (!config) return;
       const equity = tradeDB.getEquity();
       const todayTrades = tradeDB.all("SELECT * FROM trades WHERE date(created_at)=date('now','localtime')");
       const positions = tradeDB.all("SELECT * FROM positions WHERE quantity > 0");

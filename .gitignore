@@ -14,14 +14,35 @@ logs/
 *.png
 *.jpg
 
+# Diagnostic artifacts
+baseline_output.txt
+guide_content.txt
+internship_content.json
+capture-headers.js
+check-pages.js
+diagnose-pages.js
+mlflow.db
+mlruns/
+
 # Personal / business content
 promote-content.txt
+promote-services.js
 闲鱼*.md
 闲鱼*.txt
 audit_output.txt
 
-# Shopee temp
-shopee-search-result.png
-shopee-vn-status.png
-menglar-login.png
+# Personal QR codes
+public/images/微信收款码.jpg
+public/images/支付宝收款码.jpg
+public/images/我的二维码.jpg
+public/微信收款码.jpg
+public/支付宝收款码.jpg
+
+# Shopee / menglar scripts (personal business)
+shopee-*.js
+shopee-*.png
+menglar-*.js
+menglar-*.png
+fetch-shopee-data.js
+scrape-shopee-vn.js
 nul

@@ -1,3 +1,111 @@
+// 全局 fetch 默认携带 Cookie (认证)
+(function(){
+  var _fetch = window.fetch;
+  window.fetch = function(url, opts) {
+    opts = opts || {};
+    if (url && typeof url === 'string' && url.startsWith('/api/')) {
+      opts.credentials = 'include';
+    }
+    return _fetch.call(window, url, opts);
+  };
+})();
+
+// ===== WS 实时自建分钟K线 =====
+var _rtKlineCode = null, _rtKlineTimer = null, _rtKlineData = [];
+var _rtKlineOpen = 0, _rtKlineHigh = 0, _rtKlineLow = 0, _rtKlineVol = 0;
+
+function startRealtimeKline(code, basePrice) {
+  _rtKlineCode = code;
+  _rtKlineData = [];
+  var now = new Date();
+  var t = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  _rtKlineOpen = basePrice || 0;
+  _rtKlineHigh = basePrice || 0;
+  _rtKlineLow = basePrice || 0;
+  _rtKlineVol = 0;
+  _rtKlineData.push({ time: t, open: _rtKlineOpen, close: basePrice, high: _rtKlineHigh, low: _rtKlineLow, vol: 0 });
+
+  if (_rtKlineTimer) clearInterval(_rtKlineTimer);
+  // 每10秒收一根K线
+  _rtKlineTimer = setInterval(function() {
+    if (_rtKlineData.length > 0) {
+      var last = _rtKlineData[_rtKlineData.length - 1];
+      last.close = _rtKlineOpen > 0 ? _rtKlineOpen : last.close;
+      last.high = _rtKlineHigh;
+      last.low = _rtKlineLow;
+      last.vol = _rtKlineVol;
+    }
+    if (_rtKlineData.length > 120) _rtKlineData.shift();
+    renderRtKline();
+    // 新K线
+    var n = new Date();
+    var nt = n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');
+    _rtKlineOpen = 0; _rtKlineHigh = 0; _rtKlineLow = 9e9; _rtKlineVol = 0;
+    _rtKlineData.push({ time: nt, open: 0, close: 0, high: 0, low: 0, vol: 0 });
+  }, 10000);
+
+  renderRtKline();
+  var st = $('#ffRtStatus'); if (st) st.textContent = 'WS实时K线 (10s)';
+}
+
+function feedRtPrice(code, price, volume) {
+  if (code !== _rtKlineCode || !price) return;
+  if (_rtKlineOpen === 0) _rtKlineOpen = price;
+  if (price > _rtKlineHigh) _rtKlineHigh = price;
+  if (price < _rtKlineLow || _rtKlineLow === 9e9) _rtKlineLow = price;
+  _rtKlineVol += (volume || 0);
+}
+
+function renderRtKline() {
+  if (!ffRtChart || !_rtKlineData.length) return;
+  var dates = _rtKlineData.map(function(d){return d.time;});
+  var ohlc = _rtKlineData.map(function(d){
+    return [(d.open||d.close), (d.close||d.open), (d.low||d.close), (d.high||d.close)];
+  });
+  var vols = _rtKlineData.map(function(d){return [d.vol||0, (d.close||0)>=(d.open||0)?1:0];});
+  var up = '#E53935', down = '#43A047';
+  ffRtChart.setOption({
+    title: { text: 'WS实时K线 '+_rtKlineCode, left:16, top:10, textStyle:{color:'#666',fontSize:13} },
+    grid: [{left:65,right:20,top:40,height:180},{left:65,right:20,top:248,height:60}],
+    xAxis: [{type:'category',data:dates,gridIndex:0},{type:'category',data:dates,gridIndex:1,axisLabel:{show:false}}],
+    yAxis: [{type:'value',gridIndex:0,scale:true},{type:'value',gridIndex:1}],
+    series: [
+      {name:'K线',type:'candlestick',xAxisIndex:0,yAxisIndex:0,data:ohlc,itemStyle:{color:up,color0:down}},
+      {name:'量',type:'bar',xAxisIndex:1,yAxisIndex:1,data:vols,itemStyle:{color:function(p){return p.data[1]?up:down}}}
+    ]
+  }, true);
+}
+
+// 挂载到 WS onmessage (扩展原有处理)
+(function(){
+  var _origWS = window.connectWebSocket;
+  if (_origWS) {
+    var _origOnMsg = null;
+    var patchWS = function() {
+      setTimeout(function() {
+        if (window.wsClient && !window._rtPatched) {
+          window._rtPatched = true;
+          var orig = window.wsClient.onmessage;
+          window.wsClient.onmessage = function(e) {
+            if (orig) orig.call(window.wsClient, e);
+            try {
+              var msg = JSON.parse(e.data);
+              var quotes = msg.type === 'snapshot' ? (msg.quotes||[]) : (msg.type === 'quote' ? [{code:msg.code,data:msg.data}] : []);
+              quotes.forEach(function(q) {
+                var d = q.data || q;
+                if (d.code === _rtKlineCode || q.code === _rtKlineCode) {
+                  feedRtPrice(_rtKlineCode, d.price || q.price, d.volume || q.volume);
+                }
+              });
+            } catch(er) {}
+          };
+        }
+      }, 2000);
+    };
+    patchWS();
+  }
+})();
+
 // ====================================================================
 //  5. 资金流向 — 实时版
 // ====================================================================
@@ -24,119 +132,57 @@ async function loadRtChart(code) {
     const resp = await fetch(`/api/fundflow/rtchart?code=${code}`);
     const data = await resp.json();
     if (!data.candles?.length) {
-      const st = $("#ffRtStatus"); if (st) st.textContent = "暂无分钟数据";
-      ffRtChart?.setOption({
-        title: { text: "实时K线 + 资金流", left: 16, top: 10, textStyle: { color: "#666666", fontSize: 13 } },
-        graphic: [{ type: "text", left: "center", top: "center", style: { text: "分钟K线数据暂不可用\n(请确认是否交易日)", fill: "#999999", fontSize: 13, textAlign: "center" } }],
-      }, true);
+      // 分钟K线不可用, 启动WS实时自建K线
+      startRealtimeKline(code, data.price);
       return;
     }
 
     const st = $("#ffRtStatus");
     if (st) st.textContent = `${data.timestamp} 更新 · ${data.candles.length} 根K线`;
 
-    // 构建价格线数据
+    // 构建K线数据 ([开, 收, 低, 高] 格式)
     const dates = data.candles.map(c => c.time);
-    const prices = data.candles.map(c => c.close);
-    const mainFlows = data.candles.map(c => c.mainFlow);
-    const volumes = data.candles.map(c => c.volume);
-
-    // 价格涨跌颜色
+    const ohlc = data.candles.map(c => [c.open, c.close, c.low, c.high]);
+    const volumes = data.candles.map(c => [c.volume, (c.open <= c.close ? 1 : 0)]);
+    const mainFlows = data.candles.map(c => c.mainFlow || 0);
     const upColor = "#E53935", downColor = "#43A047";
-    const priceChange = prices.length >= 2 ? prices[prices.length - 1] - prices[0] : 0;
-    const lineColor = priceChange >= 0 ? upColor : downColor;
-
-    // 主力资金颜色
-    const flowColors = mainFlows.map(v => v >= 0 ? "rgba(248,113,113,0.45)" : "rgba(74,222,128,0.45)");
-    const flowBorders = mainFlows.map(v => v >= 0 ? "#E53935" : "#43A047");
 
     ffRtChart.setOption({
       backgroundColor: "transparent",
       tooltip: {
-        trigger: "axis",
-        axisPointer: { type: "cross" },
-        backgroundColor: "rgba(15,18,40,0.95)",
-        borderColor: "#2a2d3e",
-        textStyle: { color: "#333333", fontSize: 12 },
-        formatter: (params) => {
-          const idx = params[0]?.dataIndex;
-          const c = data.candles[idx];
+        trigger: "axis", axisPointer: { type: "cross" },
+        backgroundColor: "rgba(15,18,40,0.95)", borderColor: "#2a2d3e",
+        textStyle: { color: "#e0e0e0", fontSize: 12 },
+        formatter: function(params) {
+          var idx = params[0]?.dataIndex, c = data.candles[idx];
           if (!c) return "";
-          const mf = c.mainFlow >= 0 ? "+" : "";
-          return `<b>${c.time}</b><br/>
-            价格: <b style="color:${lineColor}">${c.close.toFixed(2)}</b><br/>
-            成交量: ${(c.volume/10000).toFixed(0)}万手<br/>
-            成交额: ${(c.amount/1e8).toFixed(2)}亿<br/>
-            主力净流: <b style="color:${c.mainFlow>=0?upColor:downColor}">${mf}${(c.mainFlow/10000).toFixed(0)}万</b>`;
-        },
+          return '<b>'+c.time+'</b><br/>开:'+c.open.toFixed(2)+' 高:'+c.high.toFixed(2)+' 低:'+c.low.toFixed(2)+' 收:<b>'+c.close.toFixed(2)+'</b><br/>量:'+(c.volume/10000).toFixed(0)+'万手';
+        }
       },
       grid: [
-        { left: 65, right: 20, top: 40, height: 210 },
-        { left: 65, right: 20, top: 278, height: 80 },
-        { left: 65, right: 20, top: 375, height: 32 },
+        { left: 65, right: 20, top: 40, height: 180 },
+        { left: 65, right: 20, top: 248, height: 60 },
+        { left: 65, right: 20, top: 330, height: 80 },
       ],
       xAxis: [
-        { type: "category", data: dates, gridIndex: 0,
-          axisLine: { lineStyle: { color: "#2a2d3e" } },
-          axisLabel: { color: "#999999", fontSize: 10, interval: Math.max(1, Math.floor(dates.length / 6)) },
-          axisTick: { show: false } },
-        { type: "category", data: dates, gridIndex: 1,
-          axisLine: { lineStyle: { color: "#2a2d3e" } },
-          axisLabel: { show: false }, axisTick: { show: false } },
-        { type: "category", data: dates, gridIndex: 2,
-          axisLine: { lineStyle: { color: "#2a2d3e" } },
-          axisLabel: { color: "#999999", fontSize: 9, interval: Math.max(1, Math.floor(dates.length / 4)) } },
+        { type:"category", data:dates, gridIndex:0, axisLabel:{color:"#999999",fontSize:10,interval:Math.max(1,Math.floor(dates.length/6))}, axisTick:{show:false} },
+        { type:"category", data:dates, gridIndex:1, axisLabel:{show:false}, axisTick:{show:false} },
+        { type:"category", data:dates, gridIndex:2, axisLabel:{show:false}, axisTick:{show:false} },
       ],
       yAxis: [
-        { type: "value", gridIndex: 0, scale: true,
-          splitLine: { lineStyle: { color: "#F0F0F0" } },
-          axisLabel: { color: "#666666", fontSize: 10, formatter: v => v.toFixed(0) } },
-        { type: "value", gridIndex: 1,
-          splitLine: { show: false },
-          axisLabel: { color: "#999999", fontSize: 9, formatter: v => (v / 1e4).toFixed(0) + "万" } },
-        { type: "value", gridIndex: 2,
-          splitLine: { show: false },
-          axisLabel: { color: "#999999", fontSize: 9, formatter: v => (v / 1e6).toFixed(1) + "M" } },
+        { type:"value", gridIndex:0, scale:true, splitLine:{lineStyle:{color:"#F0F0F0"}}, axisLabel:{color:"#666666",fontSize:10} },
+        { type:"value", gridIndex:1, splitLine:{show:false}, axisLabel:{color:"#999999",fontSize:9,formatter:function(v){return (v/1e4).toFixed(0)+'万'}} },
+        { type:"value", gridIndex:2, splitLine:{show:false}, axisLabel:{color:"#999999",fontSize:9,formatter:function(v){return (v/1e6).toFixed(1)+'M'}} },
       ],
       series: [
-        // 第一格: 价格曲线 + 面积填充
-        {
-          name: "价格", type: "line", xAxisIndex: 0, yAxisIndex: 0,
-          data: prices,
-          smooth: true, symbol: "none",
-          lineStyle: { color: lineColor, width: 2 },
-          areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: priceChange >= 0 ? "rgba(248,113,113,0.15)" : "rgba(74,222,128,0.15)" },
-              { offset: 1, color: "rgba(0,0,0,0)" },
-            ]),
-          },
-          markLine: { silent: true, symbol: "none",
-            data: [{ yAxis: data.price, lineStyle: { color: "#fbbf24", type: "dashed", width: 1 } }],
-            label: { formatter: `现价 ${data.price?.toFixed(2)}`, color: "#fbbf24", fontSize: 10 },
-          },
+        { name:"K线", type:"candlestick", xAxisIndex:0, yAxisIndex:0, data:ohlc,
+          itemStyle:{color:upColor,color0:downColor,borderColor:upColor,borderColor0:downColor},
+          markLine:{silent:true,symbol:"none",data:[{yAxis:data.price,lineStyle:{color:"#fbbf24",type:"dashed",width:1}}],label:{formatter:'现价 '+data.price?.toFixed(2),color:"#fbbf24",fontSize:10}}
         },
-        // 第二格: 主力资金流柱状图
-        {
-          name: "主力资金", type: "bar", xAxisIndex: 1, yAxisIndex: 1,
-          data: mainFlows,
-          itemStyle: {
-            color: (p) => flowColors[p.dataIndex],
-            borderColor: (p) => flowBorders[p.dataIndex],
-            borderWidth: 0.5,
-          },
-          tooltip: { valueFormatter: v => (v / 1e4).toFixed(0) + "万" },
-        },
-        // 第三格: 成交量柱
-        {
-          name: "成交量", type: "bar", xAxisIndex: 2, yAxisIndex: 2,
-          data: volumes.map((v, i) => ({
-            value: v,
-            itemStyle: {
-              color: prices[i] >= (prices[i - 1] || prices[i]) ? "rgba(248,113,113,0.5)" : "rgba(74,222,128,0.5)",
-            },
-          })),
-        },
+        { name:"成交量", type:"bar", xAxisIndex:1, yAxisIndex:1, data:volumes,
+          itemStyle:{color:function(p){return p.data[1]?upColor:downColor}} },
+        { name:"资金流", type:"bar", xAxisIndex:2, yAxisIndex:2, data:mainFlows,
+          itemStyle:{color:function(p){return p.data>=0?upColor:downColor}} },
       ],
     }, true);
   } catch (e) {
@@ -926,7 +972,7 @@ function generateFFInsight(quantData, liveData) {
   return { mood, icon, msg, detail };
 }
 
-// 自动刷新
+// 自动刷新 (交易时段默认开启)
 function toggleAutoRefresh() {
   clearInterval(ffLiveTimer);
   TimerManager.clear('ffLive');
@@ -940,6 +986,12 @@ function toggleAutoRefresh() {
 $("#btnLoadFF")?.addEventListener("click", loadFundFlow);
 $("#ffCode")?.addEventListener("keydown", e => { if (e.key === "Enter") loadFundFlow(); });
 $("#ffAutoRefreshCb")?.addEventListener("change", toggleAutoRefresh);
+// 交易时段默认开启自动刷新
+if (typeof isTradingHours === 'function' && isTradingHours()) {
+  const cb = $("#ffAutoRefreshCb");
+  if (cb) cb.checked = true;
+  toggleAutoRefresh();
+}
 
 // 资金流向时间维度切换
 $$(".ff-tf-btn").forEach(btn => btn.addEventListener("click", function() {

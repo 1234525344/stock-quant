@@ -1,0 +1,430 @@
+/* ============================================================
+   responsive.css — 移动端适配（零侵入桌面端）
+   仅在 @media (max-width: 768px) 内生效，桌面端完全不受影响
+   加载顺序: style.css → theme-white.css → responsive.css (最后)
+   ============================================================ */
+
+/* ============================================================
+   1. 汉堡菜单按钮
+   ============================================================ */
+.hamburger-toggle {
+  display: none; /* 桌面端隐藏 */
+}
+
+@media (max-width: 768px) {
+  .hamburger-toggle {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    z-index: 101;
+    margin-left: auto;
+    border-radius: 8px;
+  }
+  .hamburger-toggle:hover { background: #F0F0F0; }
+  .hamburger-toggle span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: #333333;
+    border-radius: 2px;
+    transition: all .3s ease;
+    transform-origin: center;
+  }
+  /* 展开时变 × */
+  body.nav-open .hamburger-toggle span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+  }
+  body.nav-open .hamburger-toggle span:nth-child(2) {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  body.nav-open .hamburger-toggle span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+  }
+
+  /* ============================================================
+     2. 导航菜单 — 桌面横向 → 手机纵向下拉
+     ============================================================ */
+  .header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 56px;
+    padding: 8px 12px;
+    gap: 0;
+  }
+  .logo {
+    font-size: 17px;
+    line-height: 40px;
+  }
+
+  /* 默认隐藏 nav，汉堡触发显示 */
+  nav {
+    display: none;
+    position: absolute;
+    top: 56px;
+    left: 0;
+    right: 0;
+    background: #FFFFFF;
+    flex-direction: column;
+    gap: 0;
+    padding: 8px 0;
+    border-bottom: 2px solid #1E88E5;
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    z-index: 99;
+    max-height: 70vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  body.nav-open nav {
+    display: flex;
+    animation: navSlideDown .25s ease;
+  }
+  @keyframes navSlideDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* 手机端导航按钮 — 全宽左对齐 */
+  nav .nav-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 14px 20px;
+    font-size: 15px;
+    border-radius: 0;
+    border-bottom: 1px solid #F0F0F0;
+    background: transparent;
+    color: #333333;
+    white-space: normal;
+  }
+  nav .nav-btn kbd {
+    float: right;
+    margin-top: 2px;
+  }
+  nav .nav-btn.active {
+    background: #EBF3FF;
+    box-shadow: none;
+    color: #1E88E5;
+  }
+  nav .nav-btn.active::after { display: none; }
+
+  /* 分组标签 — 在手机菜单中显示为分隔标题 */
+  nav .nav-group-label {
+    display: block;
+    padding: 16px 20px 6px;
+    font-size: 11px;
+    color: #1E88E5;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: none;
+    background: #F8F9FB;
+  }
+  nav .nav-group-label::after { display: none; }
+  nav .nav-group-label:first-child { padding-top: 8px; }
+
+  /* 搜索框 — 移到 header 第二行 */
+  .search-box {
+    width: 100%;
+    margin: 4px 0 0 0;
+    order: 3;
+  }
+  .search-box input {
+    width: 100%;
+    font-size: 13px;
+    padding: 8px 14px;
+  }
+  .search-box input:focus { width: 100%; }
+  .search-dropdown {
+    width: calc(100vw - 28px);
+    right: 0;
+    left: 0;
+  }
+
+  /* ============================================================
+     3. 表格横向滚动
+     ============================================================ */
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+    margin-bottom: 12px;
+    border-radius: 8px;
+  }
+  .table-responsive table {
+    min-width: 600px;
+  }
+
+  /* ============================================================
+     4. 页面布局
+     ============================================================ */
+  .page {
+    padding: 12px;
+  }
+  #app { padding-bottom: 30px; }
+
+  /* ============================================================
+     5. Grid 折叠
+     ============================================================ */
+  .index-cards         { grid-template-columns: repeat(2, 1fr) !important; }
+  .market-charts       { grid-template-columns: 1fr !important; }
+  .market-bottom       { grid-template-columns: 1fr !important; gap: 12px; }
+  .sector-flow-grid    { grid-template-columns: 1fr; }
+  .score-strip         { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .score-item          { min-width: 0; }
+  .comments-grid       { grid-template-columns: 1fr; }
+  .em-grid             { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .fund-broad-grid     { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .fund-sector-grid    { grid-template-columns: 1fr; }
+  .cmp-grid            { grid-template-columns: 1fr; gap: 12px; }
+  .bf-grid             { grid-template-columns: 1fr; }
+  .ff-summary          { grid-template-columns: 1fr; }
+  .ff-charts           { grid-template-columns: 1fr; }
+  .breadth-strip       { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .live-flow-row       { grid-template-columns: 1fr; }
+
+  /* ============================================================
+     6. 图表高度
+     ============================================================ */
+  .chart-main      { height: 340px; }
+  .chart-main-wide { height: 280px; }
+  .chart-sub       { height: 160px; }
+  .chart-mid       { height: 260px; }
+  .chart-wide      { height: 300px; }
+
+  /* ============================================================
+     7. 卡片
+     ============================================================ */
+  .card { padding: 14px; border-radius: 12px; }
+  .card h3 { font-size: 14px; }
+
+  /* ============================================================
+     8. 工具栏
+     ============================================================ */
+  .chart-toolbar { gap: 6px; }
+  .chart-toolbar input[type=text],
+  .chart-toolbar input[type=number] {
+    width: 90px;
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+  .chart-toolbar button { padding: 7px 14px; font-size: 12px; }
+  .chart-toolbar select { font-size: 12px; padding: 7px 10px; }
+
+  /* ============================================================
+     9. 表格文字缩小
+     ============================================================ */
+  table { font-size: 12px; }
+  th, td { padding: 6px 8px; }
+
+  /* ============================================================
+     10. 标签/评分
+     ============================================================ */
+  .tag { padding: 5px 12px; font-size: 11px; }
+  .enhanced-metrics { padding: 12px; }
+  .em-item { padding: 8px; }
+  .advice-card { padding: 12px; }
+  .advice-card > div { flex-direction: column; gap: 10px; }
+
+  /* ============================================================
+     11. 弹窗/浮层
+     ============================================================ */
+  .modal-content {
+    width: 95vw;
+    max-height: 85vh;
+    padding: 14px;
+  }
+  .ai-explain-btn { font-size: 11px; padding: 3px 8px; }
+
+  /* ============================================================
+     12. 实时状态条
+     ============================================================ */
+  .live-status-bar {
+    flex-wrap: wrap;
+    font-size: 12px;
+    gap: 4px;
+    padding: 6px 0;
+  }
+
+  /* ============================================================
+     13. 市场天气
+     ============================================================ */
+  .market-weather { flex-direction: column; align-items: flex-start; gap: 8px; }
+
+  /* ============================================================
+     14. 按钮通用
+     ============================================================ */
+  .action-btn { padding: 12px 0; font-size: 13px; }
+
+  /* ============================================================
+     15. AI 聊天面板
+     ============================================================ */
+  .ai-chat-panel {
+    width: calc(100vw - 24px);
+    max-width: none;
+    right: 4px;
+  }
+}
+
+/* ============================================================
+   16. 超小屏 (≤480px)
+   ============================================================ */
+@media (max-width: 480px) {
+  .header    { padding: 6px 8px; min-height: 50px; }
+  .logo      { font-size: 15px; }
+  .page      { padding: 8px; }
+  .card      { padding: 10px; border-radius: 10px; }
+  .chart-main      { height: 280px; }
+  .chart-main-wide { height: 240px; }
+  .chart-sub       { height: 140px; }
+  .chart-mid       { height: 220px; }
+  .chart-wide      { height: 260px; }
+
+  .index-cards       { grid-template-columns: repeat(2, 1fr) !important; gap: 6px; }
+  .score-strip       { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .em-grid           { grid-template-columns: 1fr; }
+  .fund-broad-grid   { grid-template-columns: 1fr; }
+  .breadth-strip     { grid-template-columns: 1fr 1fr; }
+
+  nav .nav-btn { padding: 12px 16px; font-size: 14px; }
+  .chart-toolbar input[type=text],
+  .chart-toolbar input[type=number] { width: 70px; }
+  .search-box input { font-size: 12px; }
+}
+
+/* ============================================================
+   17. 触摸优化
+   ============================================================ */
+@media (hover: none) and (pointer: coarse) {
+  .nav-btn      { min-height: 44px; display: flex; align-items: center; }
+  .tag          { min-height: 36px; display: flex; align-items: center; }
+  button        { min-height: 44px; }
+  input, select { min-height: 44px; }
+  .hamburger-toggle { min-height: 44px; min-width: 44px; }
+}
+
+/* ============================================================
+   18. 二级页面 — watchlist.html
+   ============================================================ */
+@media (max-width: 768px) {
+  /* 表头与统计 */
+  .watchlist-page .header,
+  body.wl-page .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    height: auto;
+    padding: 10px 14px;
+  }
+  .stats { flex-wrap: wrap; gap: 8px; padding: 8px 14px; }
+  .stat-item { min-width: calc(50% - 10px); font-size: 13px; }
+
+  /* 分组/模块 tab */
+  .group-tabs { gap: 4px; padding: 6px 14px; flex-wrap: wrap; }
+  .group-tab { padding: 6px 10px; font-size: 12px; }
+  .module-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
+  .module-tab { padding: 10px 14px; font-size: 13px; white-space: nowrap; }
+
+  /* 搜索 */
+  .search-box { margin: 6px 14px; width: calc(100% - 28px); }
+  .search-input { font-size: 13px; }
+
+  /* 日历 */
+  #calGrid { font-size: 11px; }
+  .cal-cell { min-height: 34px; padding: 2px; }
+
+  /* 数量输入 */
+  .qty-input { width: 56px; }
+}
+
+/* ============================================================
+   19. 二级页面 — quantlab.html
+   ============================================================ */
+@media (max-width: 768px) {
+  .header { height: auto; flex-wrap: wrap; padding: 10px 14px; gap: 8px; }
+  .subtitle { display: none; }
+  .opt-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .opt-controls input[type=text] { width: 100%; }
+  .opt-controls select { width: 100%; }
+  .port-grid { grid-template-columns: 1fr; gap: 12px; }
+  .risk-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .risk-metric { padding: 10px; }
+  .panel { padding: 12px; }
+  .alpha-strip { gap: 6px; flex-wrap: wrap; }
+  .alpha-item { min-width: 80px; padding: 8px 10px; font-size: 12px; }
+  .port-stats { gap: 8px; }
+  .port-stat-card { min-width: calc(50% - 8px); font-size: 13px; }
+  .port-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .stress-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+
+/* ============================================================
+   20. 二级页面 — autotrade.html
+   ============================================================ */
+@media (max-width: 768px) {
+  .container { padding: 10px; }
+  .grid4 { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .grid2 { grid-template-columns: 1fr; }
+  .grid3 { grid-template-columns: 1fr; }
+  .metric { padding: 10px; }
+  .metric .value { font-size: 16px; }
+  .strategy-card { padding: 10px; }
+  .radio-group { gap: 4px; flex-wrap: wrap; }
+  .radio-chip { padding: 6px 10px; font-size: 11px; }
+  .chart { height: 220px; }
+}
+@media (max-width: 480px) {
+  .grid4 { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   21. 二级页面 — admin.html
+   ============================================================ */
+@media (max-width: 768px) {
+  .topbar { padding: 10px 12px; flex-wrap: wrap; gap: 8px; }
+  .main { padding: 10px 12px; }
+  .grid2 { grid-template-columns: 1fr; }
+  .panel { padding: 12px; }
+  .row { flex-direction: column; align-items: stretch; }
+  .row input, .row select { width: 100%; }
+}
+
+/* ============================================================
+   22. 二级页面 — share.html
+   ============================================================ */
+@media (max-width: 768px) {
+  .share-card { padding: 14px; }
+  .platform-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+}
+@media (max-width: 480px) {
+  .platform-grid { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   23. 二级页面 — publish.html
+   ============================================================ */
+@media (max-width: 768px) {
+  .pub-step { flex-direction: column; align-items: flex-start; padding: 14px; }
+  .pub-step .pub-num { margin-bottom: 6px; }
+  .toggle-tabs { flex-wrap: wrap; gap: 4px; }
+}
+
+/* ============================================================
+   24. 二级页面 — login.html
+   ============================================================ */
+@media (max-width: 768px) {
+  .login-box { padding: 24px 20px; width: 90vw; }
+  .vip-box   { padding: 20px; width: 94vw; }
+}

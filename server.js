@@ -8,7 +8,7 @@ const rateLimit = require("express-rate-limit");
 const helmet = require("helmet");
 const cors = require("cors");
 const { errorHandler, notFoundHandler } = require("./src/middleware/errorHandler");
-const { checkPassword, getPasswordInfo, generateToken, verifyToken, COOKIE_NAME, COOKIE_MAX_AGE, refreshCookie } = require("./src/middleware/auth-gate");
+const { checkPassword, getPasswordInfo, generateToken, verifyToken, getTokenInfo, COOKIE_NAME, COOKIE_MAX_AGE, refreshCookie, createUser, listUsers, disableUser, enableUser, resetUserPassword } = require("./src/middleware/auth-gate");
 const { getRealtimeEngine } = require("./src/realtime-engine");
 const { getTDXTCPClient, connectTDXServer } = require("./src/tdx-tcp");
 const { STOCK_POOL, monitorCache, pushedAlertIds } = require("./src/state");
@@ -31,10 +31,19 @@ const hotmoneyRoutes = require("./src/routes/hotmoney");
 const limitupRoutes = require("./src/routes/limitup");
 const newsRoutes = require("./src/routes/news");
 const watchlistRoutes = require("./src/routes/watchlist");
+const longtermRoutes = require("./src/routes/longterm");
+const quantRoutes = require("./src/routes/quant");
 const newsEngine = require("./src/news-engine");
 
 const app = express();
-app.set("trust proxy", 1); // Cloudflare Tunnel 需要信任代理
+app.set("trust proxy", 1); // 信任第一层代理 (Cloudflare Tunnel)
+// 确保 Express 正确识别 HTTPS — Cloudflare 隧道在 X-Forwarded-Proto 中传递协议信息
+app.use((req, res, next) => {
+  if (req.headers["x-forwarded-proto"] === "https") {
+    req.secure = true;
+  }
+  next();
+});
 
 // Gzip/brotli 响应压缩 (JSON体积减少70%+, 首屏加载减半)
 app.use(require("compression")());
@@ -71,16 +80,18 @@ app.use(cookieParser());
 // 验证密码
 app.post("/api/auth/login", (req, res) => {
   const { password } = req.body || {};
-  if (!checkPassword(password || "")) {
+  const result = checkPassword(password || "");
+  if (!result.valid) {
     return res.status(401).json({ error: "密码错误", code: "WRONG_PASSWORD" });
   }
   const ip = req.ip || req.socket?.remoteAddress;
-  const token = generateToken(ip);
+  const token = generateToken(ip, result.userId);
   res.cookie(COOKIE_NAME, token, {
     maxAge: COOKIE_MAX_AGE, httpOnly: true,
-    secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/",
+    secure: !!(req.secure || req.headers["x-forwarded-proto"] === "https"),
+    sameSite: "lax", path: "/",
   });
-  res.json({ success: true, message: "验证成功" });
+  res.json({ success: true, message: "验证成功", user: result.userName || null });
 });
 
 // 查看密码信息 (本地)
@@ -90,6 +101,18 @@ app.get("/api/auth/password", (req, res) => {
     return res.status(403).json({ error: "仅限本地访问" });
   }
   res.json(getPasswordInfo());
+});
+
+// 密码格式提示 (公开 — 任何人均可访问)
+app.get("/api/auth/password-hint", (req, res) => {
+  const info = getPasswordInfo();
+  res.json({
+    format: "qp-YYYYMM-XXXXXX",
+    monthKey: info.monthKey,
+    daysUntilChange: info.daysLeft,
+    hint: `本月密码格式: qp-${info.monthKey.replace("-", "")}-XXXXXX。请通过客服获取完整密码。`,
+    contact: { wechat: "扫码联系客服获取", purchase_url: "/login.html" },
+  });
 });
 
 // 检查登录状态
@@ -110,6 +133,57 @@ app.get("/login.html", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "login.html"));
 });
 
+// ===== 无需认证的公开端点 (必须在 accessGuard 之前) =====
+
+// 健康检查 — 供负载均衡/监控/隧道管理器探测，无需登录
+app.get("/api/health", (req, res) => {
+  const tcpClient = (() => { try { return getTDXTCPClient(); } catch(_) { return null; } })();
+  const tcpStatus = tcpClient ? tcpClient.getStatus() : { connected: false };
+
+  let wssOk = false, realtimeOk = "stopped", engineSubCount = 0, engineCacheSize = 0;
+  try {
+    if (wss) wssOk = true;
+    const engine = getRealtimeEngine();
+    if (engine && engine._running) {
+      realtimeOk = "ok";
+      engineSubCount = engine.subscribedCodes ? engine.subscribedCodes.size : 0;
+      engineCacheSize = engine.quoteCache ? engine.quoteCache.size : 0;
+    }
+  } catch (_) {}
+
+  const health = {
+    status: "ok",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    version: "2.1.0",
+    environment: process.env.NODE_ENV || "development",
+    memory: {
+      heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + "MB",
+      heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + "MB",
+      rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + "MB",
+    },
+    components: {
+      database: "ok",
+      websocket: wssOk ? "ok" : "error",
+      realtimeEngine: realtimeOk,
+    },
+    dataSources: {
+      tdxTcp: { connected: tcpStatus.connected, subscribed: tcpStatus.subscribed?.length || 0, reconnectAttempts: tcpStatus.reconnectAttempts || 0 },
+      tdxFile: { available: (() => { try { return require("./src/tdx-reader").getTDXRoot() !== null; } catch(_) { return false; } })() },
+      sinaHttp: { available: true },
+      tencentHttp: { available: true },
+      eastMoney: { available: true },
+    },
+    subscriptions: { subscribedCodes: engineSubCount, cacheSize: engineCacheSize },
+  };
+  res.json(health);
+});
+
+// 公开状态页 (无需登录)
+app.get("/status", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "status.html"));
+});
+
 // 静态资源 (认证守卫之前 — CSS/JS/图片无需登录即可加载)
 const staticOptions = {
   etag: true,
@@ -127,6 +201,9 @@ app.use((req, res, next) => {
   // 始终放行
   if (req.path === "/login.html") return next();
   if (req.path.startsWith("/api/auth/")) return next();
+        if (req.path === "/status") return next();
+          if (req.path === "/options") return next();
+        if (req.path === "/api/health") return next();
   // 静态资源已在守卫之前被 express.static 处理, 不会到达此处
   // 仅 HTML 页面和 /api/ 请求需要认证
 
@@ -134,7 +211,7 @@ app.use((req, res, next) => {
   const token = req.cookies?.[COOKIE_NAME];
   if (token && verifyToken(token)) {
     // 每次请求都续期 cookie, 确保只要用户持续使用就不会过期
-    refreshCookie(res, token);
+    refreshCookie(res, token, req);
     return next();
   }
 
@@ -150,6 +227,11 @@ app.use((req, res, next) => {
 // 管理面板 (登录后访问)
 app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "admin.html"));
+});
+
+// 期权行情页 (登录后访问)
+app.get("/options", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "options.html"));
 });
 
 // 免责声明响应头
@@ -202,7 +284,7 @@ const aiLimiter = rateLimit({
 app.use("/api/ai/", aiLimiter);
 
 // API Key 管理（管理端，不需要认证 — 仅本地访问）
-const { apiKeyAuth, requireAuth, createKey, listKeys, disableKey } = require("./src/middleware/auth");
+const { apiKeyAuth, requireAuth, createKey, listKeys, listMyKeys, disableKey, disableMyKey } = require("./src/middleware/auth");
 
 // 管理接口 — 生成/查看/禁用 key
 app.get("/api/admin/keys", (req, res) => {
@@ -233,6 +315,81 @@ app.delete("/api/admin/keys/:key", (req, res) => {
   res.json({ ok: true });
 });
 
+// ===== 用户自服务 API Key 管理 (已登录用户) =====
+// 列出自己的 API Keys
+app.get("/api/auth/my-keys", (req, res) => {
+  const token = req.cookies?.[COOKIE_NAME];
+  if (!token) return res.status(401).json({ error: "请先登录" });
+  const keys = listMyKeys(token);
+  res.json({ keys });
+});
+
+// 创建自己的 API Key
+app.post("/api/auth/my-keys", (req, res) => {
+  const token = req.cookies?.[COOKIE_NAME];
+  if (!token) return res.status(401).json({ error: "请先登录" });
+  const { plan, note } = req.body || {};
+  // 限制: 每个用户最多3个活跃key
+  const existing = listMyKeys(token);
+  if (existing.length >= 3) {
+    return res.status(400).json({ error: "最多创建3个 API Key，请先删除旧 Key" });
+  }
+  const entry = createKey(plan || "monthly", note || "", token);
+  res.json({ key: entry.key, plan: entry.plan, note: entry.note, expiresAt: entry.expiresAt });
+});
+
+// 删除自己的 API Key
+app.delete("/api/auth/my-keys/:key", (req, res) => {
+  const token = req.cookies?.[COOKIE_NAME];
+  if (!token) return res.status(401).json({ error: "请先登录" });
+  const result = disableMyKey(req.params.key, token);
+  if (result) {
+    res.json({ ok: true, message: "Key 已禁用" });
+  } else {
+    res.status(404).json({ error: "Key 不存在或不属于你" });
+  }
+});
+
+// ===== 用户管理 (管理端，仅本地访问) =====
+const isLocalRequest = (req) => {
+  const ip = req.ip || req.socket?.remoteAddress;
+  return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+};
+
+app.get("/api/admin/users", (req, res) => {
+  if (!isLocalRequest(req)) return res.status(403).json({ error: "仅限本地访问" });
+  res.json({ users: listUsers() });
+});
+
+app.post("/api/admin/users", (req, res) => {
+  if (!isLocalRequest(req)) return res.status(403).json({ error: "仅限本地访问" });
+  const { name, password } = req.body || {};
+  if (!name || !password) return res.status(400).json({ error: "需要 name 和 password" });
+  const user = createUser(name, password);
+  res.json(user);
+});
+
+app.delete("/api/admin/users/:id", (req, res) => {
+  if (!isLocalRequest(req)) return res.status(403).json({ error: "仅限本地访问" });
+  disableUser(req.params.id);
+  res.json({ ok: true });
+});
+
+app.put("/api/admin/users/:id/enable", (req, res) => {
+  if (!isLocalRequest(req)) return res.status(403).json({ error: "仅限本地访问" });
+  enableUser(req.params.id);
+  res.json({ ok: true });
+});
+
+app.put("/api/admin/users/:id/password", (req, res) => {
+  if (!isLocalRequest(req)) return res.status(403).json({ error: "仅限本地访问" });
+  const { password } = req.body || {};
+  if (!password) return res.status(400).json({ error: "需要 password" });
+  const user = resetUserPassword(req.params.id, password);
+  if (!user) return res.status(404).json({ error: "用户不存在" });
+  res.json(user);
+});
+
 // 挂载路由模块 (所有路由已在模块内定义完整路径)
 app.use(systemRoutes);
 app.use(marketRoutes);
@@ -249,6 +406,8 @@ app.use(hotmoneyRoutes);
 app.use(limitupRoutes);
 app.use(newsRoutes);
 app.use(watchlistRoutes);
+app.use(quantRoutes);
+app.use(longtermRoutes);
 
 // 404处理
 app.use(notFoundHandler);
@@ -330,7 +489,8 @@ const database = require("./src/database");
 server.listen(PORT, HOST, () => {
   console.log(`量化系统已启动: http://${HOST}:${PORT}`);
   console.log(`WebSocket: ws://${HOST}:${PORT}`);
-  console.log(`通达信本地数据: C:\\new_tdx64`);
+  const tdxRoot = (() => { try { return require("./src/tdx-reader").getTDXRoot(); } catch(_) { return null; } })();
+  if (tdxRoot) console.log(`通达信本地数据: ${tdxRoot}`);
   console.log(`环境: ${process.env.NODE_ENV || "development"}`);
   // 启动新闻引擎
   newsEngine.start();

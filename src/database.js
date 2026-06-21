@@ -144,6 +144,29 @@ class Database {
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_news_created ON news_cache(created_at)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_news_sentiment ON news_cache(sentiment)`);
 
+      // 尝试添加列 (兼容旧表)
+    try { this.db.run("ALTER TABLE watchlist ADD COLUMN last_price REAL DEFAULT 0"); } catch(e) {}
+    try { this.db.run("ALTER TABLE watchlist ADD COLUMN last_preclose REAL DEFAULT 0"); } catch(e) {}
+
+    // 每日收益快照表
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS daily_pnl (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        group_id INTEGER NOT NULL,
+        group_name TEXT,
+        stock_pnl REAL DEFAULT 0,
+        option_pnl REAL DEFAULT 0,
+        total_pnl REAL DEFAULT 0,
+        stock_count INTEGER DEFAULT 0,
+        option_count INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now','localtime')),
+        UNIQUE(date, group_id)
+      )
+    `);
+
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_daily_pnl_date ON daily_pnl(date)`);
+
     // 创建索引
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_trades_code ON trades(code)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_trades_timestamp ON trades(timestamp)`);
@@ -361,6 +384,29 @@ class Database {
     this.save();
   }
 
+  // ============ 每日收益快照 ============
+  saveDailyPnl(date, groupId, groupName, stockPnl, optionPnl, totalPnl, stockCount, optionCount) {
+    this.db.run(
+      `INSERT OR REPLACE INTO daily_pnl (date, group_id, group_name, stock_pnl, option_pnl, total_pnl, stock_count, option_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [date, groupId, groupName, stockPnl, optionPnl, totalPnl, stockCount, optionCount]
+    );
+    this.save();
+  }
+
+  getMonthlyPnl(yearMonth) {
+    const result = this.db.exec(
+      "SELECT date, group_id, group_name, stock_pnl, option_pnl, total_pnl, stock_count, option_count FROM daily_pnl WHERE date LIKE ? ORDER BY date, group_id",
+      [yearMonth + '%']
+    );
+    if (!result.length || !result[0].values.length) return [];
+    return result[0].values.map(row => ({
+      date: row[0], group_id: row[1], group_name: row[2],
+      stock_pnl: row[3], option_pnl: row[4], total_pnl: row[5],
+      stock_count: row[6], option_count: row[7]
+    }));
+  }
+
   // ============ 自选股分组 ============
   getWatchlistGroups() {
     const result = this.db.exec("SELECT * FROM watchlist_groups ORDER BY sort_order");
@@ -386,7 +432,7 @@ class Database {
 
   // ============ 自选股 CRUD ============
   getWatchlistItems(groupId) {
-    let sql = "SELECT id, code, name, type, quantity, direction, group_id, sort_order, added_at FROM watchlist";
+    let sql = "SELECT id, code, name, type, quantity, direction, group_id, sort_order, added_at, COALESCE(last_price,0), COALESCE(last_preclose,0) FROM watchlist";
     const params = [];
     if (groupId) {
       sql += " WHERE group_id = ?";
@@ -398,8 +444,21 @@ class Database {
     return result[0].values.map(row => ({
       id: row[0], code: row[1], name: row[2], type: row[3],
       quantity: row[4], direction: row[5], group_id: row[6],
-      sort_order: row[7], added_at: row[8]
+      sort_order: row[7], added_at: row[8], last_price: row[9] || 0,
+      last_preclose: row[10] || 0
     }));
+  }
+
+  updateWatchlistPrice(code, price) {
+    this.db.run("UPDATE watchlist SET last_price = ? WHERE code = ?", [price, code]);
+    this.save();
+    return this.db.getRowsModified();
+  }
+
+  updateWatchlistPreClose(code, preClose) {
+    this.db.run("UPDATE watchlist SET last_preclose = ? WHERE code = ?", [preClose, code]);
+    this.save();
+    return this.db.getRowsModified();
   }
 
   addWatchlistItem({ code, name, type, quantity, direction, groupId }) {

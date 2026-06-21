@@ -19,6 +19,10 @@ const TDX_CANDIDATE_DIRS = [
 let TDX_ROOT = null;
 
 function detectTDXRoot() {
+  // TDX_ROOT 环境变量优先 (Docker/Linux 部署)
+  if (process.env.TDX_ROOT && fs.existsSync(process.env.TDX_ROOT)) {
+    return process.env.TDX_ROOT;
+  }
   for (const dir of TDX_CANDIDATE_DIRS) {
     // vipdoc exists if TDX has downloaded data; otherwise check signature files
     const vipdoc = path.join(dir, "vipdoc");
@@ -39,7 +43,9 @@ function getTDXRoot() {
 }
 
 function toTDXSymbol(code) {
-  if (code.startsWith("6")) return { market: "sh", tdxCode: `sh${code}` };
+  // 8位期权代码 (上海期权 1000xxxx)
+  if (code.length === 8 && code.startsWith("1")) return { market: "ot", tdxCode: `ot${code}` };
+  if (code.startsWith("6") || code.startsWith("5") || code.startsWith("9")) return { market: "sh", tdxCode: `sh${code}` };
   return { market: "sz", tdxCode: `sz${code}` };
 }
 

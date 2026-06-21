@@ -8,6 +8,9 @@ module.exports = {
     exec_mode: "fork",
     watch: false,
     max_memory_restart: "512M",
+    min_uptime: "60s",
+    max_restarts: 5,
+    restart_delay: 10000,
     env: {
       NODE_ENV: "production",
     },
@@ -18,9 +21,6 @@ module.exports = {
     merge_logs: true,
     // 崩溃自动重启
     autorestart: true,
-    max_restarts: 10,
-    restart_delay: 5000,
-    // 优雅关闭
-    kill_timeout: 5000,
+    kill_timeout: 8000,
   }]
 };

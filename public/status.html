@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>系统状态 — 量化交易平台</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: linear-gradient(135deg, #0a0e27 0%, #1a1040 50%, #0a0e27 100%);
+  min-height: 100vh; color: #e0e6ed; padding: 40px 20px;
+}
+.container { max-width: 700px; margin: 0 auto; }
+h1 { font-size: 24px; text-align: center; margin-bottom: 8px; }
+.sub { text-align: center; color: #6b7280; font-size: 13px; margin-bottom: 32px; }
+
+.card {
+  background: rgba(17, 20, 45, 0.9); border: 1px solid rgba(108,99,255,0.15);
+  border-radius: 12px; padding: 24px; margin-bottom: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+}
+.card-title { font-size: 14px; font-weight: 600; color: #9ca3af; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; }
+
+.status-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.status-row:last-child { border-bottom: none; }
+.status-label { font-size: 13px; color: #9ca3af; }
+.status-value { font-size: 13px; font-weight: 500; }
+.status-ok { color: #22c55e; }
+.status-warn { color: #f59e0b; }
+.status-error { color: #ef4444; }
+
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.dot-ok { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,0.5); }
+.dot-warn { background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,0.5); }
+.dot-error { background: #ef4444; box-shadow: 0 0 6px rgba(239,68,68,0.5); }
+
+.refresh { text-align: center; margin-top: 20px; font-size: 11px; color: #4b5563; }
+.refresh span { color: #6b7280; }
+.footer { text-align: center; margin-top: 40px; font-size: 11px; color: #374151; }
+.footer a { color: #6c63ff; text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📊 系统状态</h1>
+  <div class="sub">量化交易平台 — 系统运行状态</div>
+
+  <div class="card">
+    <div class="card-title">🖥 服务器</div>
+    <div class="status-row"><span class="status-label">运行状态</span><span class="status-value" id="srvStatus">—</span></div>
+    <div class="status-row"><span class="status-label">运行时间</span><span class="status-value" id="srvUptime">—</span></div>
+    <div class="status-row"><span class="status-label">内存使用</span><span class="status-value" id="srvMem">—</span></div>
+    <div class="status-row"><span class="status-label">环境</span><span class="status-value" id="srvEnv">—</span></div>
+    <div class="status-row"><span class="status-label">版本</span><span class="status-value" id="srvVer">—</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📡 数据源</div>
+    <div class="status-row"><span class="status-label">TDX TCP (通达信)</span><span class="status-value" id="dsTdx">—</span></div>
+    <div class="status-row"><span class="status-label">TDX 本地文件</span><span class="status-value" id="dsTdxFile">—</span></div>
+    <div class="status-row"><span class="status-label">新浪 HTTP</span><span class="status-value" id="dsSina">—</span></div>
+    <div class="status-row"><span class="status-label">腾讯 HTTP</span><span class="status-value" id="dsTencent">—</span></div>
+    <div class="status-row"><span class="status-label">东方财富</span><span class="status-value" id="dsEast">—</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔌 组件</div>
+    <div class="status-row"><span class="status-label">数据库 (SQLite)</span><span class="status-value" id="compDb">—</span></div>
+    <div class="status-row"><span class="status-label">WebSocket</span><span class="status-value" id="compWs">—</span></div>
+    <div class="status-row"><span class="status-label">实时引擎</span><span class="status-value" id="compRt">—</span></div>
+    <div class="status-row"><span class="status-label">订阅股票数</span><span class="status-value" id="compSub">—</span></div>
+    <div class="status-row"><span class="status-label">行情缓存数</span><span class="status-value" id="compCache">—</span></div>
+  </div>
+
+  <div class="refresh">自动刷新间隔: <span id="countdown">30</span> 秒</div>
+  <div class="footer">
+    <a href="/login.html">🔐 登录</a> &nbsp;·&nbsp;
+    <a href="/">🏠 首页</a> &nbsp;·&nbsp;
+    数据仅供参考，不构成投资建议
+  </div>
+</div>
+
+<script>
+function dot(ok) { return `<span class="dot ${ok ? 'dot-ok' : 'dot-error'}"></span>`; }
+
+async function load() {
+  try {
+    const resp = await fetch('/api/health');
+    const h = await resp.json();
+
+    // Server
+    document.getElementById('srvStatus').innerHTML = dot(true) + '<span class="status-ok">运行中</span>';
+    const up = h.uptime || 0;
+    const d = Math.floor(up / 86400), hr = Math.floor((up % 86400) / 3600), mn = Math.floor((up % 3600) / 60);
+    document.getElementById('srvUptime').textContent = d > 0 ? `${d}天 ${hr}时 ${mn}分` : `${hr}时 ${mn}分`;
+    document.getElementById('srvMem').textContent = h.memory ? `${h.memory.heapUsed} / ${h.memory.heapTotal}` : '—';
+    document.getElementById('srvEnv').textContent = h.environment || '—';
+    document.getElementById('srvVer').textContent = h.version || '—';
+
+    // Data sources
+    const ds = h.dataSources || {};
+
+    if (ds.tdxTcp) {
+      const tcp = ds.tdxTcp;
+      const ok = tcp.connected;
+      document.getElementById('dsTdx').innerHTML = dot(ok) + (ok
+        ? `<span class="status-ok">已连接</span> (订阅 ${tcp.subscribed || 0})`
+        : `<span class="status-warn">未连接</span>` + (tcp.reconnectAttempts > 0 ? ` (重试 ${tcp.reconnectAttempts} 次)` : ''));
+    }
+
+    if (ds.tdxFile) {
+      document.getElementById('dsTdxFile').innerHTML = dot(ds.tdxFile.available)
+        + (ds.tdxFile.available ? '<span class="status-ok">可用</span>' : '<span class="status-warn">未安装</span>');
+    }
+
+    document.getElementById('dsSina').innerHTML = dot(ds.sinaHttp?.available ?? true) + '<span class="status-ok">可用</span>';
+    document.getElementById('dsTencent').innerHTML = dot(ds.tencentHttp?.available ?? true) + '<span class="status-ok">可用</span>';
+    document.getElementById('dsEast').innerHTML = dot(ds.eastMoney?.available ?? true) + '<span class="status-ok">可用</span>';
+
+    // Components
+    const comp = h.components || {};
+    document.getElementById('compDb').innerHTML = dot(comp.database === 'ok') + (comp.database === 'ok' ? '<span class="status-ok">正常</span>' : '<span class="status-error">异常</span>');
+    document.getElementById('compWs').innerHTML = dot(comp.websocket === 'ok') + (comp.websocket === 'ok' ? '<span class="status-ok">正常</span>' : '<span class="status-warn">待启动</span>');
+    document.getElementById('compRt').innerHTML = dot(comp.realtimeEngine === 'ok') + (comp.realtimeEngine === 'ok' ? '<span class="status-ok">运行中</span>' : '<span class="status-warn">已停止</span>');
+
+    const subs = h.subscriptions || {};
+    document.getElementById('compSub').textContent = subs.subscribedCodes ?? '—';
+    document.getElementById('compCache').textContent = subs.cacheSize ?? '—';
+
+  } catch (e) {
+    document.getElementById('srvStatus').innerHTML = dot(false) + '<span class="status-error">无法连接</span>';
+  }
+}
+
+let sec = 30;
+setInterval(() => {
+  sec--;
+  if (sec <= 0) { sec = 30; load(); }
+  document.getElementById('countdown').textContent = sec;
+}, 1000);
+
+load();
+</script>
+</body>
+</html>

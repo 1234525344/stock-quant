@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>自选股 - 量化交易平台</title>
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/responsive.css?v=90">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0a0e17; color: #e1e5ee; min-height: 100vh; }
@@ -100,6 +101,9 @@
 
     .module-content { display: none; }
     .module-content.active { display: block; }
+
+    .cal-cell:hover { background: rgba(88,166,255,0.05); }
+    .cal-cell:last-child { border-right: none; }
   </style>
 </head>
 <body>
@@ -107,6 +111,7 @@
     <h1>⭐ 自选股 & 期权</h1>
     <div class="header-actions">
       <button class="btn" onclick="refreshAll()">🔄 刷新</button>
+      <span id="lastRefreshTime" style="color:#8b949e;font-size:12px;margin-left:8px;"></span>
     </div>
   </div>
 
@@ -155,6 +160,7 @@
     </div>
 
     <div id="stockContainer">
+      <div class="table-responsive">
       <table class="watchlist-table">
         <thead>
           <tr>
@@ -175,6 +181,7 @@
         <tbody id="stockWatchlistBody">
         </tbody>
       </table>
+      </div>
       <div class="empty-state" id="stockEmptyState" style="display: none;">
         <h3>暂无自选股</h3>
         <p>点击"+ 添加"按钮开始添加股票或ETF</p>
@@ -212,6 +219,7 @@
     </div>
 
     <div id="optionContainer">
+      <div class="table-responsive">
       <table class="watchlist-table">
         <thead>
           <tr>
@@ -229,6 +237,7 @@
         <tbody id="optionWatchlistBody">
         </tbody>
       </table>
+      </div>
       <div class="empty-state" id="optionEmptyState" style="display: none;">
         <h3>暂无期权</h3>
         <p>点击"+ 添加期权"按钮开始添加期权合约</p>
@@ -237,6 +246,36 @@
 
     <div style="padding: 12px 24px;">
       <button class="btn btn-primary" onclick="showAddOptionModal()">+ 添加期权</button>
+    </div>
+  </div>
+
+  <!-- 收益月历 -->
+  <div id="pnlCalendarSection" style="margin: 16px 24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <h3 style="color:#c9d1d9;font-size:16px;margin:0;">📅 收益月历</h3>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="btn btn-sm" onclick="changeCalendarMonth(-1)" title="上月">◀</button>
+        <span id="calMonthLabel" style="color:#c9d1d9;font-weight:600;min-width:100px;text-align:center;">2026年6月</span>
+        <button class="btn btn-sm" onclick="changeCalendarMonth(1)" title="下月">▶</button>
+        <button class="btn btn-sm" onclick="goToCurrentMonth()">本月</button>
+        <button class="btn btn-sm btn-primary" onclick="saveTodaySnapshot()" title="保存今日收益快照">💾 快照</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+      <div class="stat-item" style="background:#161b22;padding:8px 12px;border-radius:6px;">
+        <span class="stat-label">本月收益</span>
+        <span class="stat-value" id="calMonthTotal" style="font-size:16px;">--</span>
+      </div>
+      <div class="stat-item" style="background:#161b22;padding:8px 12px;border-radius:6px;">
+        <span class="stat-label">今日收益</span>
+        <span class="stat-value" id="calTodayPnl" style="font-size:16px;">--</span>
+      </div>
+    </div>
+    <div style="background:#161b22;border:1px solid #21262d;border-radius:8px;overflow:hidden;">
+      <!-- 星期头 -->
+      <div id="calWeekHeader" style="display:grid;grid-template-columns:repeat(7,1fr);text-align:center;padding:8px 0;background:#0d1117;color:#8b949e;font-size:13px;border-bottom:1px solid #21262d;"></div>
+      <!-- 日期格子 -->
+      <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);min-height:200px;"></div>
     </div>
   </div>
 
@@ -417,10 +456,58 @@
       }
     }
 
+    // ===== WebSocket 实时行情 (仅更新DOM, 不修改数据) =====
+    let wsWatchlist = null;
+    function connectWatchlistWS() {
+      if (wsWatchlist && wsWatchlist.readyState === WebSocket.OPEN) return;
+      try {
+        const wsUrl = `${location.protocol==='https:'?'wss:':'ws:'}//${location.host}`;
+        wsWatchlist = new WebSocket(wsUrl);
+        wsWatchlist.onopen = () => { subscribeWatchlistCodes(); };
+        wsWatchlist.onmessage = (e) => {
+          try {
+            const msg = JSON.parse(e.data);
+            const tickList = msg.type === 'snapshot' ? (msg.quotes||[]) : (msg.type === 'quote' ? [{code:msg.code,data:msg.data}] : []);
+            var changed = false;
+            tickList.forEach(t => {
+              const q = t.data || t;
+              const code = q.code || t.code;
+              if (!code || !q.price) return;
+              const row = document.querySelector('tr[data-code="'+code+'"]');
+              if (row) {
+                var cells = row.cells;
+                if (cells[4]) cells[4].textContent = Number(q.price).toFixed(4);
+                if (cells[5] && q.change !== undefined) cells[5].textContent = (q.change>0?'+':'')+Number(q.change).toFixed(4);
+                if (cells[6] && q.changePercent !== undefined) cells[6].textContent = (q.changePercent>0?'+':'')+Number(q.changePercent).toFixed(2)+'%';
+              }
+              // 同步更新内存数据
+              var found = stockWatchlistData.find(function(i){return i.code===code;});
+              if (found) { found.price = q.price; found.change = q.change; found.preClose = q.preClose||found.preClose; found.dailyPnl = (found.quantity||0)*((q.price||0)-(found.preClose||0)); changed = true; }
+              found = optionWatchlistData.find(function(i){return i.code===code;});
+              if (found) { found.price = q.price; found.preClose = q.preClose||found.preClose; found.dailyPnl = (found.direction||1)*(found.quantity||0)*((q.price||0)-(found.preClose||0)); changed = true; }
+            });
+            if (changed) { updateStockStats(); updateGrandTotalPnl(); }
+          } catch(err) {}
+        };
+        wsWatchlist.onclose = () => { wsWatchlist = null; setTimeout(connectWatchlistWS, 5000); };
+        wsWatchlist.onerror = () => { wsWatchlist = null; };
+      } catch(e) {}
+    }
+
+    function subscribeWatchlistCodes() {
+      if (!wsWatchlist || wsWatchlist.readyState !== 1) return;
+      const allCodes = [...stockWatchlistData, ...optionWatchlistData].map(i => i.code);
+      if (allCodes.length) wsWatchlist.send(JSON.stringify({type:'subscribe',codes:allCodes}));
+    }
+
     // 刷新所有数据
     async function refreshAll() {
-      await Promise.all([loadGroups(), loadStockWatchlist(), loadOptionWatchlist()]);
+      await loadGroups();
+      await loadStockWatchlist();
+      await loadOptionWatchlist();
       updateGrandTotalPnl();
+      subscribeWatchlistCodes();
+      updateRefreshTime();
     }
 
     // 加载自选股组
@@ -645,17 +732,7 @@
       } catch (error) {
         console.error('加载自选股失败:', error);
       }
-
-      // 同步加载期权收益数据（用于股票模块的收益合计）
-      try {
-        const optResp = await fetch('/api/watchlist?group_id=99', { credentials: 'include' });
-        const optData = await optResp.json();
-        if (optData.items) optionWatchlistData = optData.items;
-      } catch (e) {}
-
-      // 更新统计（含期权收益）
       updateStockStats();
-      updateGrandTotalPnl();
     }
 
     // 加载期权
@@ -699,7 +776,7 @@
         const retailFlowClass = getFlowClass(item.retailFlow);
         const netFlowClass = getFlowClass(item.netFlow);
         return `
-          <tr>
+          <tr data-code="${item.code}">
             <td class="code">${item.code}</td>
             <td class="name">${item.name || '--'}</td>
             <td>${getTypeTag(item.type)}</td>
@@ -743,7 +820,7 @@
         const dailyPnlClass = getChangeClass(item.dailyPnl);
         const directionClass = item.direction > 0 ? 'positive' : 'negative';
         return `
-          <tr>
+          <tr data-code="${item.code}">
             <td class="code">${item.code}</td>
             <td class="name">${item.name || '--'}</td>
             <td class="${directionClass}">${getDirectionText(item.direction)}</td>
@@ -751,12 +828,14 @@
               <input type="number" class="qty-input" value="${item.quantity || 0}"
                      onchange="updateOptionQuantity('${item.code}', this.value)">
             </td>
-            <td class="price ${changeClass}">${formatPrice(item.price)}</td>
-            <td class="change ${changeClass}">${item.change ? (item.change > 0 ? '+' : '') + item.change.toFixed(4) : '--'}</td>
-            <td class="change ${changePercentClass}">${item.changePercent ? (item.changePercent > 0 ? '+' : '') + item.changePercent.toFixed(2) + '%' : '--'}</td>
+            <td><input type="number" step="0.0001" class="qty-input" value="${formatPrice(item.price)}" onchange="updateOptionPrice('${item.code}', this.value)" style="width:80px;" title="现价"><br><span style="font-size:10px;color:#8b949e;">昨${formatPrice(item.preClose)}</span></td>
+            <td class="change ${changeClass}">--</td>
+            <td class="change ${changePercentClass}">--</td>
             <td class="change ${dailyPnlClass}">${item.dailyPnl ? (item.dailyPnl > 0 ? '+' : '') + item.dailyPnl.toFixed(2) : '0.00'}</td>
             <td class="actions">
               <button class="btn btn-sm" onclick="toggleOptionDirection('${item.code}', ${item.direction})">${item.direction > 0 ? '买' : '卖'}</button>
+              <button class="btn btn-sm" onclick="var p=prompt('现价:','${item.price}');if(p)updateOptionPrice('${item.code}',p)">💰价</button>
+              <button class="btn btn-sm" onclick="var p=prompt('昨结算:','${item.preClose}');if(p)updateOptionPrice('${item.code}',null,p)">📅昨结</button>
               <button class="btn btn-sm btn-danger" onclick="removeOptionWatchlist('${item.code}')">删除</button>
             </td>
           </tr>
@@ -908,6 +987,29 @@
       }
     }
 
+    // 更新期权现价/昨结算
+    async function updateOptionPrice(code, newPrice, newPreClose) {
+      var body = {};
+      if (newPrice && !isNaN(newPrice)) body.price = parseFloat(newPrice);
+      if (newPreClose && !isNaN(newPreClose)) body.preClose = parseFloat(newPreClose);
+      if (Object.keys(body).length === 0) return;
+      try {
+        await fetch('/api/watchlist/'+code, {
+          method: 'PUT', headers: {'Content-Type':'application/json'}, credentials:'include',
+          body: JSON.stringify(body)
+        });
+        var item = optionWatchlistData.find(function(i){return i.code===code;});
+        if (item) {
+          if (body.price !== undefined) item.price = body.price;
+          if (body.preClose !== undefined) item.preClose = body.preClose;
+          item.dailyPnl = (item.direction||1) * (item.quantity||0) * (item.price - (item.preClose||0));
+        }
+        renderOptionWatchlist(optionWatchlistData);
+        updateOptionStats();
+        updateGrandTotalPnl();
+      } catch(e) { alert('更新失败: '+e.message); }
+    }
+
     // 切换期权方向
     async function toggleOptionDirection(code, currentDirection) {
       const newDirection = currentDirection > 0 ? -1 : 1;
@@ -1002,6 +1104,124 @@
     document.getElementById('addOptionCode').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') addOptionWatchlist();
     });
+
+    // ========== 收益月历 ==========
+    let calYear, calMonth;
+
+    function initCalendar() {
+      const now = new Date();
+      calYear = now.getFullYear();
+      calMonth = now.getMonth() + 1;
+      renderCalendar();
+      loadCalendarData();
+    }
+
+    function changeCalendarMonth(d) {
+      calMonth += d;
+      if (calMonth > 12) { calMonth = 1; calYear++; }
+      if (calMonth < 1) { calMonth = 12; calYear--; }
+      renderCalendar();
+      loadCalendarData();
+    }
+
+    function goToCurrentMonth() {
+      var n = new Date();
+      calYear = n.getFullYear();
+      calMonth = n.getMonth() + 1;
+      renderCalendar();
+      loadCalendarData();
+    }
+
+    function renderCalendar() {
+      document.getElementById('calMonthLabel').textContent = calYear + '年' + calMonth + '月';
+      document.getElementById('calWeekHeader').innerHTML = ['一','二','三','四','五','六','日'].map(function(d) { return '<div>' + d + '</div>'; }).join('');
+      var fd = new Date(calYear, calMonth - 1, 1).getDay();
+      var dim = new Date(calYear, calMonth, 0).getDate();
+      var today = new Date().toISOString().slice(0, 10);
+      var off = fd === 0 ? 6 : fd - 1;
+      var rows = Math.ceil((off + dim) / 7);
+      var total = rows * 7;
+      var grid = document.getElementById('calGrid');
+      grid.innerHTML = '';
+      for (var i = 0; i < total; i++) {
+        var dn = i - off + 1;
+        var ok = dn >= 1 && dn <= dim;
+        var ds = ok ? calYear+'-'+String(calMonth).padStart(2,'0')+'-'+String(dn).padStart(2,'0') : '';
+        var isT = ds === today;
+        var c = document.createElement('div');
+        c.style.cssText = 'padding:6px;text-align:center;border-right:1px solid #21262d;border-bottom:1px solid #21262d;min-height:52px;' + (isT ? 'background:rgba(88,166,255,0.08);' : '');
+        if (!ok) { c.style.opacity = '0.3'; grid.appendChild(c); continue; }
+        c.innerHTML = '<div style="font-size:12px;color:'+(isT?'#58a6ff':'#8b949e')+';margin-bottom:4px;">'+dn+'</div><div class="cal-pnl" id="calPnl_'+ds+'" style="font-size:11px;font-weight:600;">-</div>';
+        grid.appendChild(c);
+      }
+    }
+
+    async function loadCalendarData() {
+      var mk = calYear+'-'+String(calMonth).padStart(2,'0');
+      try {
+        var r = await fetch('/api/watchlist/calendar?month='+mk, { credentials: 'include' });
+        var d = await r.json();
+        var mt = 0, tp = 0, today = new Date().toISOString().slice(0, 10);
+        if (d.days) {
+          d.days.forEach(function(dd) {
+            var el = document.getElementById('calPnl_'+dd.date);
+            if (!el) return;
+            var p = dd.total_pnl;
+            mt += p;
+            if (dd.date === today) tp = p;
+            el.innerHTML = '<span class="'+(p>=0?'positive':'negative')+'">'+(p>0?'+':'')+p.toFixed(0)+'</span>';
+          });
+        }
+        document.getElementById('calMonthTotal').textContent = (mt>0?'+':'')+mt.toFixed(2);
+        document.getElementById('calMonthTotal').className = 'stat-value '+(mt>=0?'positive':'negative');
+        document.getElementById('calTodayPnl').textContent = (tp>0?'+':'')+tp.toFixed(2);
+        document.getElementById('calTodayPnl').className = 'stat-value '+(tp>=0?'positive':'negative');
+      } catch(e) { console.error('月历加载失败:', e); }
+    }
+
+    async function saveTodaySnapshot() {
+      try {
+        var r = await fetch('/api/watchlist/calendar/snapshot', { method: 'POST', credentials: 'include' });
+        var d = await r.json();
+        if (d.success) { alert('已保存今日快照 ('+d.date+', '+d.saved+'个分组)'); loadCalendarData(); }
+      } catch(e) { alert('保存失败: '+e.message); }
+    }
+
+    // 自动刷新: 股票WS实时, 期权3s, 全量5s
+    let watchlistAutoTimer = null, optionFastTimer = null;
+    function startWatchlistAutoRefresh() {
+      clearInterval(watchlistAutoTimer);
+      clearInterval(optionFastTimer);
+      refreshAll();
+      // 全量刷新5s (股票+期权+统计)
+      watchlistAutoTimer = setInterval(refreshAll, 5000);
+    }
+
+    function updateRefreshTime() {
+      var el = document.getElementById('lastRefreshTime');
+      if (!el) return;
+      var now = new Date();
+      el.textContent = now.getHours().toString().padStart(2,'0')+':'+
+        now.getMinutes().toString().padStart(2,'0')+':'+
+        now.getSeconds().toString().padStart(2,'0');
+    }
+
+    // Hook: 在原checkAuth执行后启动所有定时任务
+    var _origCA = checkAuth;
+    checkAuth = async function() {
+      await _origCA();           // 原登录逻辑
+      initCalendar();             // 收益月历
+      connectWatchlistWS();       // WebSocket实时行情
+      startWatchlistAutoRefresh();// 5s自动刷新
+      // 自动保存今日收益快照
+      try { var r=await fetch('/api/watchlist/calendar?month='+new Date().toISOString().slice(0,7),{credentials:'include'});var d=await r.json();if(!d.days||d.days.filter(function(dd){return dd.date===new Date().toISOString().slice(0,10)}).length===0){await saveTodaySnapshotSilent();} } catch(e) {}
+    };
+    // 页面加载完成后立即启动(此时DOMContentLoaded早已触发, 需要直接调用)
+    checkAuth();
+
+    async function saveTodaySnapshotSilent() {
+      try { await fetch('/api/watchlist/calendar/snapshot', { method: 'POST', credentials: 'include' }); loadCalendarData(); } catch(e) {}
+    }
 
 	  </script>
 	</body>

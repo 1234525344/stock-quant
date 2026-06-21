@@ -30,7 +30,7 @@ async function saveKeys(keys) {
 }
 
 // 生成新 key
-function createKey(plan = "monthly", note = "") {
+function createKey(plan = "monthly", note = "", owner = null) {
   const keys = loadKeys();
   const key = "sk-" + crypto.randomBytes(24).toString("hex");
   const now = new Date();
@@ -46,6 +46,7 @@ function createKey(plan = "monthly", note = "") {
     key,
     plan,
     note,
+    owner: owner || "admin",
     enabled: true,
     createdAt: now.toISOString(),
     expiresAt: expiresAt ? expiresAt.toISOString() : null,
@@ -93,15 +94,28 @@ function recordUsage(key) {
   return true;
 }
 
-// 列出所有 keys
+// 列出所有 keys (管理端 — 截断 key)
 function listKeys() {
   return loadKeys().map(k => ({ ...k, key: k.key.slice(0, 10) + "..." }));
+}
+
+// 列出某用户自己的 keys (返回完整 key)
+function listMyKeys(owner) {
+  return loadKeys().filter(k => k.owner === owner && k.enabled);
 }
 
 // 禁用 key
 function disableKey(key) {
   const keys = loadKeys();
   const entry = keys.find(k => k.key === key);
+  if (entry) { entry.enabled = false; saveKeys(keys); }
+  return entry;
+}
+
+// 用户禁用自己的 key
+function disableMyKey(key, owner) {
+  const keys = loadKeys();
+  const entry = keys.find(k => k.key === key && k.owner === owner);
   if (entry) { entry.enabled = false; saveKeys(keys); }
   return entry;
 }
@@ -144,4 +158,4 @@ function requireAuth(req, res, next) {
   next();
 }
 
-module.exports = { apiKeyAuth, requireAuth, createKey, listKeys, disableKey, validateKey };
+module.exports = { apiKeyAuth, requireAuth, createKey, listKeys, listMyKeys, disableKey, disableMyKey, validateKey };

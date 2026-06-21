@@ -7,6 +7,31 @@ const https = require("https");
 
 const WXPUSHER_API = "https://wxpusher.zjiecode.com/api/send/message";
 
+/**
+ * 获取 WxPusher 配置，环境变量优先于数据库设置。
+ * @param {object} [settings] - tradeDB.getSettings() 返回值 (可选)
+ * @returns {{ appToken: string, uids: string[] } | null}
+ */
+function getWxPusherConfig(settings) {
+  const appToken = process.env.WXPUSHER_APP_TOKEN
+    || (settings && settings.wxpusher_appToken)
+    || "";
+  let uids = [];
+  if (process.env.WXPUSHER_UIDS) {
+    uids = process.env.WXPUSHER_UIDS.split(",").map(s => s.trim()).filter(Boolean);
+  } else if (settings && settings.wxpusher_uids && settings.wxpusher_uids !== "[]") {
+    try {
+      uids = typeof settings.wxpusher_uids === "string"
+        ? JSON.parse(settings.wxpusher_uids)
+        : settings.wxpusher_uids;
+    } catch (e) {
+      uids = [];
+    }
+  }
+  if (!appToken || !uids.length) return null;
+  return { appToken, uids };
+}
+
 /** 发送 WxPusher 通知 */
 async function sendWxPusher({ appToken, uids }, { title, content }) {
   if (!appToken) throw new Error("WxPusher AppToken 未配置");
@@ -89,4 +114,4 @@ async function testNotify(config) {
   });
 }
 
-module.exports = { sendWxPusher, formatTradeMessage, formatDailySummary, testNotify };
+module.exports = { getWxPusherConfig, sendWxPusher, formatTradeMessage, formatDailySummary, testNotify };

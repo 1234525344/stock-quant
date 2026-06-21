@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="量化交易平台内容分享中心，一键生成公众号、雪球、知乎量化分析文章，免费A股量化工具。">
 <meta property="og:title" content="量化交易平台 — 免费A股量化分析工具">
-<meta property="og:url" content="https://stockquant.serveousercontent.com/share">
+<meta property="og:url" content="" id="og-url">
 <meta name="robots" content="index, follow">
 <title>内容分享中心 — 量化交易平台 | 公众号/雪球/知乎素材生成</title>
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/responsive.css?v=90">
 <style>
 .share-card { background: rgba(255,255,255,.03); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,.06); border-radius: 18px; padding: 28px; margin-bottom: 16px; }
 .share-card h3 { color: #e0e4f0; margin-bottom: 8px; }
@@ -41,13 +42,12 @@
       <p>扫描下方二维码即可打开量化平台，欢迎转发到微信群/朋友圈</p>
       <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
         <div style="text-align:center;flex-shrink:0;">
-          <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://stockquant.serveousercontent.com&bgcolor=1a1d2e&color=c8cdf0" alt="网站二维码" style="width:180px;height:180px;border-radius:12px;border:2px solid rgba(99,102,241,.2);" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22180%22 height=%22180%22><rect fill=%22%231a1d2e%22 width=%22180%22 height=%22180%22 rx=%2212%22/><text fill=%22%238890b5%22 font-size=%2212%22 x=%2225%22 y=%2295%22>QR加载失败</text></svg>'">
+          <img src="" id="qr-img" alt="网站二维码" style="width:180px;height:180px;border-radius:12px;border:2px solid rgba(99,102,241,.2);" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22180%22 height=%22180%22><rect fill=%22%231a1d2e%22 width=%22180%22 height=%22180%22 rx=%2212%22/><text fill=%22%238890b5%22 font-size=%2212%22 x=%2225%22 y=%2295%22>QR加载失败</text></svg>'">
           <div style="font-size:11px;color:#5f6b8a;margin-top:6px;">扫码即开</div>
         </div>
         <div style="flex:1;min-width:200px;">
           <div style="color:#c8cdf0;font-size:14px;font-weight:600;margin-bottom:8px;">📋 微信转发文案（复制粘贴）：</div>
-          <div class="copy-area" style="margin-top:0;font-size:13px;line-height:2;">发现一个免费的量化分析工具，可以看A股K线、策略回测、资金流向、AI自动进化策略，数据来源新浪/东方财富。不用下载，直接打开就能用：
-https://stockquant.serveousercontent.com</div>
+          <div class="copy-area" id="share-text-area" style="margin-top:0;font-size:13px;line-height:2;"></div>
           <button class="btn btn-primary btn-sm" id="btnCopyShare" style="margin-top:8px;">📋 复制转发文案</button>
         </div>
       </div>
@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnCopyShare')?.addEventListener('click', function() {
     const btn = this;
     const orig = btn.textContent;
-    const text = '发现一个免费的量化分析工具，可以看A股K线、策略回测、资金流向、AI自动进化策略，数据来源新浪/东方财富。不用下载，直接打开就能用：\nhttps://stockquant.serveousercontent.com';
+    const text = `发现一个免费的量化分析工具，可以看A股K线、策略回测、资金流向、AI自动进化策略，数据来源新浪/东方财富。不用下载，直接打开就能用：\n${location.origin}`;
     navigator.clipboard.writeText(text).then(() => {
       btn.textContent = '✅ 已复制！去微信粘贴';
       btn.style.background = 'linear-gradient(135deg,#4ade80,#22c55e)';
@@ -157,6 +157,16 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnLoadShort')?.addEventListener('click', loadShortPost);
   document.getElementById('btnZhihu')?.addEventListener('click', showZhihuTemplate);
 });
+
+// 初始化动态URL
+(function() {
+  const baseUrl = location.origin;
+  document.getElementById('og-url')?.setAttribute('content', baseUrl + '/share');
+  document.getElementById('qr-img')?.setAttribute('src',
+    `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(baseUrl)}&bgcolor=1a1d2e&color=c8cdf0`);
+  document.getElementById('share-text-area').innerHTML =
+    `发现一个免费的量化分析工具，可以看A股K线、策略回测、资金流向、AI自动进化策略，数据来源新浪/东方财富。不用下载，直接打开就能用：<br>${baseUrl}`;
+})();
 
 // 加载页面时自动生成
 loadArticle();

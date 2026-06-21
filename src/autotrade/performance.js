@@ -79,14 +79,14 @@ function analyzeTrades(trades) {
   // 简化为按时间排序配对
   if (trades.length < 2) return [];
 
-  const sorted = [...trades].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const sorted = [...trades].sort((a, b) => new Date(a.created_at || a.date) - new Date(b.created_at || b.date));
   const positions = {}; // code -> { buys: [] }
   const completed = [];
 
   for (const t of sorted) {
     if (!positions[t.code]) positions[t.code] = { buys: [], name: t.name };
     if (t.side === "buy") {
-      positions[t.code].buys.push({ qty: t.quantity, price: t.price, fee: t.fee || 0, time: t.created_at });
+      positions[t.code].buys.push({ qty: t.quantity, price: t.price, fee: t.fee || 0, time: t.created_at || t.date });
     } else {
       let sellQty = t.quantity;
       let sellProceeds = 0, costBasis = 0, totalFee = t.fee || 0;

@@ -12,7 +12,12 @@
     "pm2:restart": "pm2 restart stock-quant",
     "pm2:logs": "pm2 logs stock-quant",
     "test": "jest --coverage",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:build-qlib": "docker-compose build --build-arg INSTALL_QLIB=true"
   },
   "dependencies": {
     "axios": "^1.7.0",

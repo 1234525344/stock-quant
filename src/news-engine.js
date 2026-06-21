@@ -105,6 +105,12 @@ class NewsEngine {
         this._fetchCLS(),
         this._fetchEastMoneyNews(),
       ]);
+      const stats = results.map((r, i) => {
+        const names = ['EastMoney','Sina','EastMoneyStock','CLS','EastMoneyNews'];
+        const count = r.status === 'fulfilled' ? r.value.length : 0;
+        if (r.status === 'rejected') console.error(`[新闻引擎] ${names[i]} 失败:`, r.reason?.message);
+        return `${names[i]}:${count}`;
+      });
       const all = results.flatMap(r => r.status === "fulfilled" ? r.value : []);
       // 去重
       const seen = new Set(this.news.map(n => n.hash));
@@ -123,6 +129,8 @@ class NewsEngine {
         const sources = {};
         fresh.forEach(n => { sources[n.source] = (sources[n.source] || 0) + 1; });
         console.log(`[新闻引擎] 新增 ${fresh.length} 条 (来源: ${Object.entries(sources).map(([k,v])=>`${k}:${v}`).join(', ')})，总计 ${this.news.length} 条`);
+      } else {
+        console.log(`[新闻引擎] 抓取完成, 无新增 (各源: ${stats.join(', ')})`);
       }
       this.lastFetch = Date.now();
     } catch (e) {

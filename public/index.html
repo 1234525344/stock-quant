@@ -1,24 +1,31 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><text y=%2228%22 font-size=%2228%22>📈</text></svg>">
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="description" content="免费量化交易分析平台，提供A股K线技术分析、策略回测、资金流向、AI策略进化器、因子模型等功能。数据来源新浪/东方财富，实时行情。">
 <meta name="keywords" content="量化交易,A股,股票分析,策略回测,技术指标,资金流向,K线图,MACD,RSI,选股">
 <meta property="og:title" content="量化交易平台 — 让投资更简单">
 <meta property="og:description" content="免费量化分析工具，A股技术分析+策略回测+资金流向+AI进化">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://stockquant.serveousercontent.com">
+<meta property="og:url" content="" id="og-url">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#FFFFFF">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="canonical" href="https://stockquant.serveousercontent.com">
+<link rel="canonical" href="" id="canonical-url">
+<script>
+document.getElementById('og-url')?.setAttribute('content', location.origin);
+document.getElementById('canonical-url')?.setAttribute('href', location.origin);
+</script>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
 <title>量化交易平台 — 免费A股量化分析工具 | 策略回测·资金流向·AI选股</title>
-<link rel="stylesheet" href="/css/style.css?v=1">
-<link rel="stylesheet" href="/css/theme-white.css?v=1">
+<link rel="stylesheet" href="/css/style.css?v=90">
+<link rel="stylesheet" href="/css/theme-white.css?v=90">
+<link rel="stylesheet" href="/css/responsive.css?v=90">
 <!-- 诊断：捕获所有JS错误并显示在页面上 -->
 <script>
 window.__errors = [];
@@ -35,15 +42,16 @@ window.addEventListener('unhandledrejection', function(e) {
 window.addEventListener('load', function() {
   setTimeout(function() {
     var el = document.getElementById('__diag');
-    if (el && window.__errors.length === 0) el.style.display = 'none';
+    var isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
+	    if (el && window.__errors.length === 0 && !isMobile) el.style.display = 'none';
   }, 3000);
 });
 </script>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="/js/echarts.min.js"></script>
 <script src="/js/lightweight-charts.min.js"></script>
-<script src="/js/modules/utils.js?v=1"></script>
-<script src="/js/modules/managers.js?v=1"></script>
-<script src="/js/modules/tradingview-chart.js?v=1"></script>
+<script src="/js/modules/utils.js?v=90"></script>
+<script src="/js/modules/managers.js?v=90"></script>
+<script src="/js/modules/tradingview-chart.js?v=90"></script>
 </head>
 <body>
   <div id="__loading" style="position:fixed;inset:0;z-index:99998;background:#F5F6FA;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#1E88E5;font-family:monospace;">
@@ -55,6 +63,7 @@ window.addEventListener('load', function() {
   <!-- 顶部导航 -->
   <header class="header">
     <div class="logo">量化交易平台</div>
+    <button class="hamburger-toggle" id="hamburgerToggle" aria-label="导航菜单" aria-expanded="false"><span></span><span></span><span></span></button>
     <nav>
       <span class="nav-group-label">看行情</span>
       <button class="nav-btn active" data-page="market" title="看大盘涨跌、板块资金、市场情绪 · 快捷键 1">市场总览<kbd>1</kbd></button>
@@ -62,7 +71,10 @@ window.addEventListener('load', function() {
       <button class="nav-btn" data-page="fundflow" title="看主力资金在买什么卖什么 · 快捷键 3">资金流向<kbd>3</kbd></button>
       <button class="nav-btn" data-page="fund" title="看ETF基金板块资金流向，发掘投资机会">基金板块</button>
       <a href="/watchlist.html" class="nav-btn" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;text-decoration:none;display:inline-block">⭐ 自选股</a>
+	      <a href="/options" class="nav-btn" style="background:linear-gradient(135deg,#6c63ff,#4da6ff);color:#fff;text-decoration:none;display:inline-block">📊 期权行情</a>
       <span class="nav-group-label">做策略</span>
+      <button class="nav-btn" data-page="quantlab" title="Python量化引擎+TradingView图表 · 快捷键 Q" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;">🔬 量化实验室<kbd>Q</kbd></button>
+      <button class="nav-btn" data-page="backtest" title="用历史数据验证交易策略的收益和风险 · 快捷键 4" style="background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;">📊 策略回测<kbd>4</kbd></button>
                   <button class="nav-btn" data-page="compare" title="把多个策略放在一起比较谁更好 · 快捷键 5">策略对比<kbd>5</kbd></button>
       <button class="nav-btn" data-page="scan" title="一键筛选出符合条件的股票 · 快捷键 6">批量选股<kbd>6</kbd></button>
             <a href="/autotrade.html" class="nav-btn" style="background:linear-gradient(135deg,#22c55e,#10b981);color:#fff;text-decoration:none;display:inline-block">🤖 自动交易</a>
@@ -295,6 +307,67 @@ window.addEventListener('load', function() {
     </div>
   </section>
 
+  <!-- ==================== 策略回测 ==================== -->
+  <section id="page-backtest" class="page">
+    <div style="max-width:1100px;margin:0 auto;padding:16px;">
+      <div class="card" style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <h3 style="margin:0;">📊 策略回测</h3>
+          <input type="text" id="btCode" placeholder="股票代码" value="600519" style="width:110px;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+          <select id="btStrategy" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+            <option value="multiFactorStrategy">多因子策略</option>
+            <option value="maCrossStrategy">均线交叉</option>
+            <option value="macdStrategy">MACD策略</option>
+            <option value="bollStrategy">布林带策略</option>
+          </select>
+          <div class="bt-period-btn active" data-days="90" style="padding:6px 12px;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:13px;">3个月</div>
+          <div class="bt-period-btn" data-days="180" style="padding:6px 12px;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:13px;">半年</div>
+          <div class="bt-period-btn" data-days="365" style="padding:6px 12px;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:13px;">1年</div>
+          <button class="btn btn-primary" id="btnBacktest">▶ 开始回测</button>
+          <button class="btn btn-sm" id="btnBTExplain" style="display:none;">🤖 AI解读</button>
+        </div>
+      </div>
+      <div class="card">
+        <div id="btStatus" style="padding:8px;color:#666;font-size:13px;">输入股票代码，选择策略，点击开始回测</div>
+        <div id="chartEquity" style="height:300px;"></div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:12px;">
+          <div class="lt-card"><span class="lt-label">总收益</span><span class="lt-val" id="btRet">--</span></div>
+          <div class="lt-card"><span class="lt-label">最大回撤</span><span class="lt-val" id="btDD">--</span></div>
+          <div class="lt-card"><span class="lt-label">Sharpe</span><span class="lt-val" id="btSharpe">--</span></div>
+          <div class="lt-card"><span class="lt-label">胜率</span><span class="lt-val" id="btWinRate">--</span></div>
+          <div class="lt-card"><span class="lt-label">交易次数</span><span class="lt-val" id="btStatsTrades">--</span></div>
+        </div>
+        <div id="btTrades" style="margin-top:12px;max-height:300px;overflow:auto;font-size:12px;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 量化实验室 ==================== -->
+  <section id="page-quantlab" class="page">
+    <div style="max-width:1300px;margin:0 auto;padding:16px;">
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <h3 style="margin:0;">🔬 量化实验室</h3>
+          <input type="text" id="qlCode" placeholder="股票代码" value="000001" style="width:110px;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:14px;">
+          <button class="btn btn-primary" id="btnQlAnalyze">▶ 分析</button>
+          <span id="qlStatus" style="color:#666;font-size:13px;"></span>
+          <button class="btn btn-sm" id="btnQlBt" style="display:none;">📊 回测</button>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:12px;">
+        <div id="qlChart" style="height:400px;"></div>
+        <div id="qlSignals" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;font-size:12px;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="card"><div id="chartQLMacd" style="height:180px;"></div></div>
+        <div class="card"><div id="chartQLRsi" style="height:180px;"></div></div>
+      </div>
+      <div class="card" style="margin-top:12px;">
+        <h4 style="margin:0 0 8px 0;">📊 策略对比</h4>
+        <div id="qlStrategies" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;"></div>
+      </div>
+    </div>
+  </section>
   <!-- ==================== 策略对比 ==================== -->
   <section id="page-compare" class="page">
     <!-- 白话引导 -->
@@ -518,7 +591,7 @@ window.addEventListener('load', function() {
         <h3 style="margin:0;">📡 ETF 板块实时资金</h3>
         <span style="font-size:11px;color:#999999;">主力净流入排序 · 点击ETF代码查看详情</span>
       </div>
-      <div style="overflow-x:auto;">
+      <div class="table-responsive">
         <table class="etf-flow-table" id="etfFlowTable">
           <thead><tr>
             <th>板块</th><th>涨跌幅</th><th>主力净流入</th><th>超大单</th><th>大单</th><th>主力占比</th><th>关联ETF</th>
@@ -559,7 +632,7 @@ window.addEventListener('load', function() {
           <button class="fund-sort-btn" data-sort="1m">1个月</button>
         </div>
       </div>
-      <div style="overflow-x:auto;">
+      <div class="table-responsive">
         <table class="fund-rank-table" id="fundRankTable">
           <thead><tr>
             <th>#</th><th>基金名称</th><th>最新净值</th><th>日涨跌</th><th>近1月</th><th>近3月</th><th>近6月</th><th>近1年</th><th>规模(亿)</th>
@@ -707,7 +780,7 @@ window.addEventListener('load', function() {
     <!-- 全部扫描表 -->
     <div style="background:#FFFFFF;border:1px solid #EAEAEA;border-radius:10px;padding:16px;">
       <div style="font-size:14px;font-weight:700;color:#1A1A2E;margin-bottom:12px;">📊 全部扫描结果</div>
-      <div style="overflow-x:auto;">
+      <div class="table-responsive">
         <table id="hmAllTable" style="width:100%;border-collapse:collapse;font-size:13px;">
           <thead>
             <tr style="color:#666;text-align:left;border-bottom:2px solid #EAEAEA;background:#F8F9FB;">
@@ -748,7 +821,7 @@ window.addEventListener('load', function() {
     </div>
 
     <!-- 涨停池表格 -->
-    <div style="overflow-x:auto;">
+    <div class="table-responsive">
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead>
           <tr style="background:rgba(239,68,68,0.08);border-bottom:2px solid rgba(239,68,68,0.2);">
@@ -874,8 +947,8 @@ window.addEventListener('load', function() {
   </div>
 </div>
 
-<script src="/js/ai-chat.js?v=1"></script>
-<script src="/js/app.js?v=46"></script>
-<script src="/js/app-pages.js?v=46"></script>
+<script src="/js/ai-chat.js?v=90"></script>
+<script src="/js/app.js?v=90"></script>
+<script src="/js/app-pages.js?v=90"></script>
 </body>
 </html>

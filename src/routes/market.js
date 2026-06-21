@@ -553,4 +553,56 @@ router.get("/api/market/breadth", cacheMiddleware(30000), asyncHandler(async (re
     res.json(breadth || { error: "数据获取失败" });
 }));
 
+// ═══════════════════════════════════════════════════════════
+// 期权行情 (akshare)
+// ═══════════════════════════════════════════════════════════
+
+const { getOptionQuotes, getOptionInfo, getOptionMinute, getOptionDaily } = require("../opt-bridge");
+
+// 期权合约基本信息列表
+router.get("/api/option/info", cacheHeaders(300), async (req, res) => {
+  try {
+    const data = await getOptionInfo();
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 期权实时行情 (可指定code筛选)
+router.get("/api/option/quotes", cacheHeaders(10), async (req, res) => {
+  try {
+    const { codes } = req.query;
+    const codeList = codes ? codes.split(",") : [];
+    const data = await getOptionQuotes(codeList);
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 单期权实时分钟行情
+router.get("/api/option/minute/:symbol", cacheHeaders(10), async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    if (!symbol) return res.status(400).json({ error: "需要期权合约代码" });
+    const data = await getOptionMinute(symbol);
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 单期权日线历史
+router.get("/api/option/daily/:symbol", cacheMiddleware(60000), async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    if (!symbol) return res.status(400).json({ error: "需要期权合约代码" });
+    const data = await getOptionDaily(symbol);
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

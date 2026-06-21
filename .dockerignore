@@ -1,0 +1,93 @@
+# Build artifacts
+node_modules/
+dist-electron/
+coverage/
+__pycache__/
+*.pyc
+
+# Runtime data (volumes)
+data/
+logs/
+*.log
+*.db
+
+# Git & dev tooling
+.git/
+.claude/
+.browser-auth/
+
+# Diagnostic/generated images (root level)
+*.png
+*.jpg
+!public/favicon*
+!public/images/
+
+# Generated content
+diagrams/
+diagrams_v2/
+diagrams_v3/
+report_images/
+pdf_img/
+pdf_pages/
+media_extracted/
+mlruns/
+mlflow.db
+nul
+baseline_output.txt
+audit_output.txt
+guide_content.txt
+internship_content.json
+.scan-test.json
+.clip-temp.txt
+
+# Personal/business content
+闲鱼*.md
+闲鱼*.txt
+promote-*.js
+promote-*.txt
+menglar-*.js
+menglar-*.png
+shopee-*.js
+shopee-*.png
+fetch-shopee-data.js
+scrape-shopee-vn.js
+
+# Diagnostic scripts
+capture-headers.js
+check-pages.js
+diagnose-pages.js
+
+# Windows-only scripts (lb's personal setup)
+*.bat
+*.ps1
+!startup.bat
+ecosystem.config.*
+electron-main.js
+tunnel-manager.js
+monitor.js
+setup-scheduled-tasks.js
+register-startup.bat
+start-on-boot.bat
+github-auto.js
+deploy-github.ps1
+
+# Cloudflare Tunnel (personal infra)
+.cloudflared/
+
+# External vendored subprojects (unused by main app)
+modules/
+
+# Render.com (separate deploy path)
+render.yaml
+
+# Env files (provided via docker-compose)
+.env
+.env.example
+
+# Tests
+__tests__/
+jest.config.js
+
+# Misc
+tdx-formulas/
+scripts/archive/

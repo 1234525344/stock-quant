@@ -1,16 +1,29 @@
-# Render.com 部署配置
+# Render.com 一键部署配置
+# 点击 README 中的 "Deploy to Render" 按钮即可部署
 services:
   - type: web
     name: stock-quant
-    env: node
+    runtime: docker
+    repo: https://github.com/1234525344/stock-quant
     region: oregon
-    buildCommand: npm install --omit=dev
-    startCommand: node server.js
     plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
       - key: HOST
         value: 0.0.0.0
+      - key: PORT
+        value: "3456"
+      - key: PYTHON_BIN
+        value: python3
       - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: AIHUBMIX_API_KEY
+        sync: false
+      - key: WXPUSHER_APP_TOKEN
+        sync: false
+      - key: WXPUSHER_UIDS
         sync: false

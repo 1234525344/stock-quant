@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>量化交易平台 — 访问验证</title>
+<link rel="stylesheet" href="/css/responsive.css?v=90">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -42,6 +43,8 @@ body {
 .login-box button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 .login-box .error { text-align: center; color: #ef4444; font-size: 12px; margin-top: 8px; min-height: 18px; }
 .login-box .hint { text-align: center; font-size: 11px; color: #4b5563; margin-top: 16px; line-height: 1.6; }
+.login-box .format-hint { text-align: center; font-size: 11px; color: #6b7280; margin-top: 4px; padding: 6px 10px; background: rgba(108,99,255,0.08); border-radius: 6px; }
+.login-box .format-hint code { font-family: 'SF Mono', 'Fira Code', monospace; color: #6c63ff; font-size: 12px; }
 
 .vip-box {
   background: rgba(17, 20, 45, 0.9);
@@ -79,6 +82,7 @@ body {
 
   <label>密码</label>
   <input type="password" id="pwd" placeholder="输入访问密码..." autofocus onkeydown="if(event.key==='Enter')doLogin()">
+  <div class="format-hint" id="formatHint" style="display:none"></div>
   <button id="btn" onclick="doLogin()">验证进入</button>
   <div class="error" id="error"></div>
   <div class="hint">验证通过后, 30天内无需重复输入<br>本机浏览器自动记住登录状态</div>
@@ -170,6 +174,18 @@ async function doLogin() {
     btn.disabled = false; btn.textContent = '验证进入';
   }
 }
+(async function loadPasswordHint() {
+  try {
+    const resp = await fetch('/api/auth/password-hint');
+    const data = await resp.json();
+    const el = document.getElementById('formatHint');
+    if (data.format && data.daysUntilChange !== undefined) {
+      el.style.display = 'block';
+      el.innerHTML = `📅 密码格式: <code>${data.format}</code> &nbsp;|&nbsp; 还剩 <b>${data.daysUntilChange}</b> 天更换`;
+    }
+  } catch (_) {}
+})();
+
 (async function checkAuth() {
   try {
     const resp = await fetch('/api/auth/status');

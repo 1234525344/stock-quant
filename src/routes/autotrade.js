@@ -9,15 +9,15 @@ const { EvolutionEngine } = require("../autotrade/evolution-engine");
 
 // 确保 tradeDB 已初始化
 if (!tradeDB.ready) tradeDB.init();
-const { sendPushPlus } = require("../services/notify");
+const { sendPushPlus, getWxPusherConfig } = require("../services/notify");
 
 // 发送选股通知
 async function notifyStockPick(title, stocks, source) {
   try {
     const settings = tradeDB.getSettings();
     if (settings.notify_on_trade !== "true") return;
-    const config = { appToken: settings.wxpusher_appToken, uids: settings.wxpusher_uids };
-    if (!config.appToken || !config.uids?.length) return;
+    const config = getWxPusherConfig(settings);
+    if (!config) return;
     const stockList = stocks.map(s => `> - **${s.code}** ${s.name || ""}`).join("\n");
     const { sendWxPusher } = require("../services/notify");
     await sendWxPusher(config, {
@@ -397,6 +397,10 @@ router.get("/api/autotrade/current-regime", asyncHandler(async (req, res) => {
 
 router.get("/api/autotrade/settings", asyncHandler(async (req, res) => {
   const settings = tradeDB.getSettings();
+  // 合并环境变量中的 WxPusher 配置信息
+  if (process.env.WXPUSHER_APP_TOKEN) {
+    settings.wxpusher_appToken_env = true;
+  }
   // 隐藏 token 中间部分
   if (settings.wxpusher_appToken) {
     const t = settings.wxpusher_appToken;
@@ -431,8 +435,8 @@ router.post("/api/autotrade/reset-account", asyncHandler(async (req, res) => {
 const { testNotify } = require("../services/notify");
 router.post("/api/autotrade/test-notify", asyncHandler(async (req, res) => {
   const settings = tradeDB.getSettings();
-  const config = { appToken: settings.wxpusher_appToken, uids: settings.wxpusher_uids };
-  if (!config.appToken || !config.uids?.length) return res.status(400).json({ error: "请先配置 WxPusher AppToken 和 UID" });
+  const config = getWxPusherConfig(settings);
+  if (!config) return res.status(400).json({ error: "请先配置 WxPusher AppToken 和 UID (环境变量 WXPUSHER_APP_TOKEN + WXPUSHER_UIDS 或在设置页面配置)" });
   await testNotify(config);
   res.json({ success: true, message: "测试通知已发送，请检查微信" });
 }));
