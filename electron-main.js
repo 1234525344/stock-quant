@@ -5,8 +5,16 @@ const { execSync } = require("child_process");
 
 let mainWindow;
 
-const PORT = parseInt(process.env.PORT) || 3456;
 const isDev = !app.isPackaged;
+
+// 端口检测
+function findFreePort(start) {
+  const net = require("net");
+  for (let p = start; p < start + 10; p++) {
+    try { const s = new net.Server(); s.listen(p, "0.0.0.0"); s.close(); return p; } catch (_) {} }
+  return start;
+}
+const PORT = parseInt(process.env.PORT) || findFreePort(3456);
 
 // ── Python 检测 ──
 function findPython() {
@@ -63,7 +71,7 @@ app.whenReady().then(() => {
   process.env.ELECTRON = "1";
   process.env.PYTHON_BIN = PYTHON_BIN || "";
   process.env.NODE_ENV = "development";
-  process.env.PORT = String(PORT);
+  process.env.PORT = String(PORT);  // PORT 已经检测过可用
   process.env.DATA_DIR = isDev
     ? path.join(__dirname, "data")
     : path.join(path.dirname(app.getPath("exe")), "data");
@@ -74,11 +82,26 @@ app.whenReady().then(() => {
   // 直接在主进程加载 server.js（不在子进程中）
   require("./server.js");
 
-  // server.js 的 server.listen 是异步的，稍等后打开窗口
-  setTimeout(() => {
-    console.log("[Electron] Opening window on port", PORT);
-    createWindow();
-  }, 2000);
+  // 等待服务器就绪后再打开窗口
+  console.log("[Electron] Waiting for server on port", PORT);
+  const http = require("http");
+  const checkServer = (retries = 30) => {
+    http.get(`http://127.0.0.1:${PORT}/api/health`, (res) => {
+      if (res.statusCode === 200) {
+        console.log("[Electron] Server ready, opening window");
+        createWindow();
+      } else if (retries > 0) {
+        setTimeout(() => checkServer(retries - 1), 500);
+      } else {
+        console.log("[Electron] Timeout, opening window anyway");
+        createWindow();
+      }
+    }).on("error", () => {
+      if (retries > 0) setTimeout(() => checkServer(retries - 1), 500);
+      else createWindow();
+    });
+  };
+  setTimeout(() => checkServer(), 1500);
 });
 
 app.on("window-all-closed", () => { app.quit(); });
