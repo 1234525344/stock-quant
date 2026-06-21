@@ -15,11 +15,17 @@ class TradeDB {
 
   init() {
     if (this.ready) return;
-    const dataDir = path.join(__dirname, "../..", "data");
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-
+    if (!Database) { console.log("[TradeDB] better-sqlite3 不可用，跳过初始化"); return; }
+    const { getDataDir } = require("../data-dir");
+    const dataDir = getDataDir();
     const dbPath = path.join(dataDir, "trades.db");
-    this.db = new Database(dbPath);
+    try {
+      this.db = new Database(dbPath);
+    } catch (e) {
+      console.log("[TradeDB] better-sqlite3 初始化失败:", e.message);
+      Database = null;
+      return;
+    }
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("foreign_keys = ON");
     this._createTables();

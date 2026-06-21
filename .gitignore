@@ -5,6 +5,11 @@ dist-electron/
 .DS_Store
 Thumbs.db
 
+# Build outputs
+dist-package/
+release/
+dist-electron/
+
 # Temp & generated
 .clip-temp.txt
 .browser-auth/

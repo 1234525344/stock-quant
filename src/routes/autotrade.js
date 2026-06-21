@@ -358,7 +358,7 @@ router.get("/api/autotrade/daily-report", asyncHandler(async (req, res) => {
   const date = req.query.date || new Date().toISOString().slice(0, 10);
   const fs = require("fs");
   const path = require("path");
-  const filepath = path.join(__dirname, "..", "..", "data", "reports", `report_${date}.json`);
+  const filepath = path.join(require("../data-dir").getDataDir(), "reports", `report_${date}.json`);
   if (fs.existsSync(filepath)) {
     res.json(JSON.parse(fs.readFileSync(filepath, "utf8")));
   } else {

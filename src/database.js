@@ -4,7 +4,8 @@ const fs = require("fs");
 const path = require("path");
 const { logger } = require("./logger");
 
-const DATA_DIR = path.join(__dirname, "..", "data");
+const { getDataDir } = require("./data-dir");
+const DATA_DIR = getDataDir();
 const DB_FILE = path.join(DATA_DIR, "stock-quant.db");
 
 class Database {
@@ -15,9 +16,6 @@ class Database {
 
   async init() {
     try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
 
       const SQL = await initSqlJs();
 

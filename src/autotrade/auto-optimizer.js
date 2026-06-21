@@ -142,7 +142,7 @@ function generateDailyReport() {
 }
 
 function saveDailyReport(report) {
-  const dir = path.join(__dirname, "..", "..", "data", "reports");
+  const dir = path.join(require("../data-dir").getDataDir(), "reports");
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const filename = `report_${report.date}.json`;
   fs.writeFileSync(path.join(dir, filename), JSON.stringify(report, null, 2), "utf8");

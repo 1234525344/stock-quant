@@ -53,7 +53,7 @@ class AutoTradeEngine extends EventEmitter {
   async start(wsServer) {
     await tradeDB.init();
     this.wss = wsServer || null;
-    this._logPath = path.join(__dirname, "..", "..", "data", "trades.log");
+    this._logPath = path.join(require("../data-dir").getDataDir(), "trades.log");
     this._loadStrategies();
 
     if (!tradeDB.getAccount().initial_capital) {

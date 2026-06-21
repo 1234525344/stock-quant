@@ -1,8 +1,21 @@
 // 生产级日志系统
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 
-const LOG_DIR = path.join(__dirname, "..", "logs");
+// 日志目录：优先用环境变量，否则用 data 目录下的 logs/
+let LOG_DIR;
+try {
+  if (process.env.LOG_DIR) {
+    LOG_DIR = process.env.LOG_DIR;
+  } else if (__dirname.includes(".asar")) {
+    LOG_DIR = path.join(path.dirname(process.resourcesPath || process.cwd()), "logs");
+  } else {
+    LOG_DIR = path.join(__dirname, "..", "logs");
+  }
+} catch (e) {
+  LOG_DIR = path.join(os.tmpdir(), "stock-quant-logs");
+}
 const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
 
 class Logger {

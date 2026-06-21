@@ -3,10 +3,13 @@
   "version": "2.1.0",
   "description": "量化交易平台 — 多因子Alpha · 组合优化 · 风险归因",
   "author": "QuantLab",
-  "main": "server.js",
+  "main": "electron-main.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "electron": "electron .",
+    "build:win": "electron-builder --win",
+    "build:portable": "electron-builder --win portable",
     "pm2:start": "pm2 start ecosystem.config.js",
     "pm2:stop": "pm2 stop stock-quant",
     "pm2:restart": "pm2 restart stock-quant",
@@ -19,6 +22,51 @@
     "docker:logs": "docker-compose logs -f",
     "docker:build-qlib": "docker-compose build --build-arg INSTALL_QLIB=true"
   },
+  "build": {
+    "appId": "com.quantlab.stock-quant",
+    "productName": "量化交易平台",
+    "copyright": "Copyright © 2026 QuantLab",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron-main.js",
+      "server.js",
+      "src/**/*.js",
+      "src/**/*.py",
+      "src/**/*.json",
+      "public/**/*",
+      "config/**/*",
+      "package.json",
+      "!src/**/*.bak",
+      "!**/__pycache__/**",
+      "!**/__tests__/**",
+      "!**/coverage/**"
+    ],
+    "extraResources": [
+      {
+        "from": "python/",
+        "to": "python/",
+        "filter": [
+          "**/*.py"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "量化交易平台_v${version}.exe"
+    }
+  },
   "dependencies": {
     "axios": "^1.7.0",
     "compression": "^1.8.1",
@@ -30,11 +78,11 @@
     "helmet": "^8.2.0",
     "iconv-lite": "^0.7.2",
     "openai": "^4.73.0",
-    "sql.js": "^1.11.0",
+    "sql.js": "^1.14.1",
     "ws": "^8.20.1"
   },
   "optionalDependencies": {
-    "better-sqlite3": "^12.10.0"
+    "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {
     "canvas": "^3.2.3",

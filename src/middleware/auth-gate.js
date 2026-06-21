@@ -6,9 +6,11 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
+const { getDataDir } = require("../data-dir");
+
 const COOKIE_NAME = "qp_auth";
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
-const PASSWORD_FILE = path.join(__dirname, "..", "..", "data", "access-password.json");
+const PASSWORD_FILE = path.join(getDataDir(), "access-password.json");
 
 // ===== 密码管理 =====
 
@@ -155,7 +157,7 @@ function resetUserPassword(id, newPassword) {
 
 // ===== Token 管理（持久化到磁盘） =====
 
-const TOKEN_FILE = path.join(__dirname, "..", "..", "data", "auth-tokens.json");
+const TOKEN_FILE = path.join(getDataDir(), "auth-tokens.json");
 
 const tokens = new Map();
 

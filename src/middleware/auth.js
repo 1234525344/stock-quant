@@ -3,7 +3,8 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const KEY_FILE = path.join(__dirname, "..", "..", "data", "api-keys.json");
+const { getDataDir } = require("../data-dir");
+const KEY_FILE = path.join(getDataDir(), "api-keys.json");
 
 // 内存缓存 — 启动时加载, 避免每次请求读盘
 let keysCache = null;
