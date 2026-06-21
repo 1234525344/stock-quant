@@ -67,6 +67,8 @@ function createWindow() {
 
 // ── 启动 ──
 app.whenReady().then(() => {
+  // 确保 CWD 在 exe 目录（dotenv 从这里加载 .env）
+  try { process.chdir(path.dirname(app.getPath("exe"))); } catch(_) {}
   // 设置环境变量，告诉 server.js 这是 Electron 桌面应用
   process.env.ELECTRON = "1";
   process.env.PYTHON_BIN = PYTHON_BIN || "";
