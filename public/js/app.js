@@ -301,6 +301,18 @@ function navigateToStock(code) {
   try { switchPage("stock"); } catch (e) { console.error("[Nav] switchPage error:", e); }
 }
 
+// 从自选股跳转: /?code=000001 自动打开个股分析
+(function() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  if (code && code.trim()) {
+    // 延迟执行，等 PageRegistry 初始化完毕
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => navigateToStock(code.trim()), 500);
+    });
+  }
+})();
+
 // ====================================================================
 //  1. 市场总览 (实时量化仪表盘)
 // ====================================================================

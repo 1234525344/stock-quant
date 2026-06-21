@@ -792,6 +792,7 @@
             <td class="${retailFlowClass}">${formatFlow(item.retailFlow)}</td>
             <td class="${netFlowClass}">${formatFlow(item.netFlow)}</td>
             <td class="actions">
+              <a href="/?code=${item.code}" class="btn btn-sm" style="background:#238636;border-color:#2ea043;color:#fff;text-decoration:none;">分析</a>
               <button class="btn btn-sm btn-danger" onclick="removeStockWatchlist('${item.code}')">删除</button>
             </td>
           </tr>
