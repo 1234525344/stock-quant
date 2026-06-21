@@ -117,6 +117,8 @@ app.get("/api/auth/password-hint", (req, res) => {
 
 // 检查登录状态
 app.get("/api/auth/status", (req, res) => {
+  // Electron 桌面应用始终视为已认证
+  if (isElectronApp) return res.json({ authenticated: true });
   const token = req.cookies?.[COOKIE_NAME];
   const valid = token && verifyToken(token);
   res.json({ authenticated: !!valid });
@@ -197,7 +199,12 @@ const staticOptions = {
 app.use(express.static(path.join(__dirname, "public"), staticOptions));
 
 // ===== 访问守卫 =====
+// Electron 桌面应用: 检测是否运行在 asar 内（打包后的 Electron 环境）
+const isElectronApp = process.env.ELECTRON === "1" || __dirname.includes(".asar");
 app.use((req, res, next) => {
+  // Electron 桌面应用: 本地运行无需密码
+  if (isElectronApp) return next();
+
   // 始终放行
   if (req.path === "/login.html") return next();
   if (req.path.startsWith("/api/auth/")) return next();
